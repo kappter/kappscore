@@ -18,16 +18,16 @@ function renderPlayers() {
 
     const div = document.createElement("div");
     div.className = "player";
-    div.style.left = `${x}px`;
-    div.style.top = `${y}px`;
+    div.style.left = \`\${x}px\`;
+    div.style.top = \`\${y}px\`;
     if (!active[i]) div.classList.add("inactive");
 
-    div.innerHTML = `
-      <button onclick="changeScore(${i}, -1)">−</button>
-      <div class="score" id="score-${i}">${scores[i]}</div>
-      <button onclick="changeScore(${i}, 1)">+</button>
-      <button onclick="toggleActive(${i})">Active</button>
-    `;
+    div.innerHTML = \`
+      <button onclick="changeScore(\${i}, -1)">−</button>
+      <div class="score" id="score-\${i}">\${scores[i]}</div>
+      <button onclick="changeScore(\${i}, 1)">+</button>
+      <button onclick="toggleActive(\${i})">Active</button>
+    \`;
     container.appendChild(div);
   }
 }
@@ -59,7 +59,7 @@ socket.on("init", (data) => {
 socket.on("scoreUpdate", (data) => {
   data.forEach((s, i) => {
     scores[i] = s;
-    document.getElementById(`score-${i}`).textContent = s;
+    document.getElementById(\`score-\${i}\`).textContent = s;
   });
 });
 
