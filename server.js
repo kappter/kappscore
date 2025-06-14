@@ -1,4 +1,3 @@
-// server.js
 const express = require("express");
 const http = require("http");
 const socketIo = require("socket.io");
@@ -7,23 +6,36 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
-let scores = {};
+app.use(express.static("public"));
 
-io.on("connection", socket => {
-  console.log("User connected");
+let scores = [];
+let active = [];
+let highScoreWins = true;
 
-  // Send initial scores
-  socket.emit("scoreUpdate", scores);
+io.on("connection", (socket) => {
+  console.log("A user connected");
 
-  // Receive new score updates
-  socket.on("updateScore", updatedScores => {
-    scores = updatedScores;
-    io.emit("scoreUpdate", scores); // broadcast to all
+  socket.emit("init", { scores, active, highScoreWins });
+
+  socket.on("updateScores", (newScores) => {
+    scores = newScores;
+    io.emit("scoreUpdate", scores);
+  });
+
+  socket.on("updateActive", (newActive) => {
+    active = newActive;
+    io.emit("activeUpdate", active);
+  });
+
+  socket.on("updateGameMode", (mode) => {
+    highScoreWins = mode;
+    io.emit("modeUpdate", highScoreWins);
   });
 
   socket.on("disconnect", () => {
-    console.log("User disconnected");
+    console.log("A user disconnected");
   });
 });
 
-server.listen(3000, () => console.log("Listening on port 3000"));
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
