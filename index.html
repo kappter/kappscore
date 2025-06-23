@@ -1,26 +1,185 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Scoreboard</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rummy Scorekeeper</title>
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    
+    <!-- Firebase Configuration -->
+    <script src="firebase-config.js"></script>
 </head>
 <body>
-  <div id="scores"></div>
-  <button onclick="addPoints('player1', 5)">+5 to Player 1</button>
+    <!-- Landing Page -->
+    <div id="landingPage" class="page active">
+        <div class="container">
+            <header>
+                <h1>Rummy Scorekeeper</h1>
+                <p>Keep track of scores for your card game sessions</p>
+            </header>
+            
+            <div class="options-grid">
+                <button id="createSessionBtn" class="option-tile">
+                    <div class="tile-icon">🎮</div>
+                    <h2>Create New Session</h2>
+                    <p>Start a new game and be the scorekeeper</p>
+                </button>
+                
+                <button id="joinSessionBtn" class="option-tile">
+                    <div class="tile-icon">👥</div>
+                    <h2>Join Session</h2>
+                    <p>Enter a code to join an existing game</p>
+                </button>
+            </div>
+        </div>
+    </div>
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script>
-    const socket = io();
-    let scores = {};
+    <!-- Create Session Page -->
+    <div id="createSessionPage" class="page">
+        <div class="container">
+            <header>
+                <button id="backToLanding" class="back-btn">← Back</button>
+                <h1>Create New Session</h1>
+            </header>
+            
+            <form id="createSessionForm" class="session-form">
+                <div class="form-group">
+                    <label for="numPlayers">Number of Players</label>
+                    <div class="number-input">
+                        <button type="button" id="decreasePlayer" class="number-btn">-</button>
+                        <input type="number" id="numPlayers" min="1" max="12" value="2" readonly>
+                        <button type="button" id="increasePlayer" class="number-btn">+</button>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="sessionName">Session Name (Optional)</label>
+                    <input type="text" id="sessionName" placeholder="Enter session name">
+                </div>
+                
+                <div class="form-group">
+                    <label for="startingScore">Starting Score</label>
+                    <input type="number" id="startingScore" value="0" step="0.1">
+                </div>
+                
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="allowDecimals">
+                        Allow decimal scores
+                    </label>
+                </div>
+                
+                <div class="form-group">
+                    <label for="targetScore">Target Score (Optional)</label>
+                    <input type="number" id="targetScore" placeholder="e.g., 500" step="0.1">
+                </div>
+                
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="playAfterTarget">
+                        Continue playing after target score is reached
+                    </label>
+                </div>
+                
+                <button type="submit" class="primary-btn">Create Session</button>
+            </form>
+        </div>
+    </div>
 
-    socket.on("scoreUpdate", data => {
-      scores = data;
-      document.getElementById("scores").innerText = JSON.stringify(scores);
-    });
+    <!-- Join Session Page -->
+    <div id="joinSessionPage" class="page">
+        <div class="container">
+            <header>
+                <button id="backToLandingFromJoin" class="back-btn">← Back</button>
+                <h1>Join Session</h1>
+            </header>
+            
+            <form id="joinSessionForm" class="session-form">
+                <div class="form-group">
+                    <label for="joinCode">Session Code</label>
+                    <input type="text" id="joinCode" placeholder="Enter session code" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="playerName">Your Name</label>
+                    <input type="text" id="playerName" placeholder="Enter your name" required>
+                </div>
+                
+                <button type="submit" class="primary-btn">Join Session</button>
+            </form>
+            
+            <div class="qr-section">
+                <p>Or scan a QR code</p>
+                <button id="scanQRBtn" class="secondary-btn">Scan QR Code</button>
+            </div>
+        </div>
+    </div>
 
-    function addPoints(player, points) {
-      scores[player] = (scores[player] || 0) + points;
-      socket.emit("updateScore", scores);
-    }
-  </script>
+    <!-- Scorekeeper Interface -->
+    <div id="scorekeeperPage" class="page">
+        <div class="container">
+            <header class="scorekeeper-header">
+                <div class="session-info">
+                    <h1 id="sessionTitle">Game Session</h1>
+                    <div class="session-code">
+                        <span>Code: <strong id="displaySessionCode">ABC123</strong></span>
+                        <button id="showQRBtn" class="icon-btn">📱</button>
+                    </div>
+                </div>
+                <button id="endSessionBtn" class="danger-btn">End Session</button>
+            </header>
+            
+            <div id="playersGrid" class="players-grid">
+                <!-- Player tiles will be dynamically generated here -->
+            </div>
+            
+            <div class="game-controls">
+                <button id="resetScoresBtn" class="secondary-btn">Reset All Scores</button>
+                <button id="newRoundBtn" class="secondary-btn">New Round</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Player View Interface -->
+    <div id="playerViewPage" class="page">
+        <div class="container">
+            <header class="player-header">
+                <h1 id="playerSessionTitle">Game Session</h1>
+                <div class="player-info">
+                    <span>You are: <strong id="currentPlayerName">Player</strong></span>
+                    <button id="editNameBtn" class="icon-btn">✏️</button>
+                </div>
+            </header>
+            
+            <div id="playerViewGrid" class="players-grid readonly">
+                <!-- Player tiles will be dynamically generated here -->
+            </div>
+            
+            <div class="player-controls">
+                <button id="leaveSessionBtn" class="danger-btn">Leave Session</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- QR Code Modal -->
+    <div id="qrModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Session QR Code</h2>
+                <button id="closeQRModal" class="close-btn">×</button>
+            </div>
+            <div class="modal-body">
+                <div id="qrCodeContainer"></div>
+                <p>Share this QR code for others to join</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
 </body>
 </html>
+
