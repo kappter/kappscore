@@ -8,7 +8,7 @@ const firebaseConfig = {
     // In production, you would replace these with your own Firebase project credentials
     apiKey: "AIzaSyDemoKeyForRummyScorekeeper123456789",
     authDomain: "rummy-scorekeeper-demo.firebaseapp.com",
-    databaseURL: "https://rummy-scorekeeper-demo-default-rtdb.firebaseio.com/",
+    databaseURL: "https://kappscore-default-rtdb.firebaseio.com/",
     projectId: "rummy-scorekeeper-demo",
     storageBucket: "rummy-scorekeeper-demo.appspot.com",
     messagingSenderId: "123456789012",
