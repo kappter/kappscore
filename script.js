@@ -193,12 +193,34 @@ function handleCreateSession(e) {
     e.preventDefault();
     console.log('Create session form submitted');
     
-    const sessionName = document.getElementById('sessionName').value || 'Game Session';
-    const playerCount = parseInt(document.getElementById('numPlayers').value);
-    const startingScore = parseFloat(document.getElementById('startingScore').value) || 0;
-    const allowDecimals = document.getElementById('allowDecimals').checked;
-    const targetScore = parseFloat(document.getElementById('targetScore').value) || null;
-    const playAfterTarget = document.getElementById('playAfterTarget').checked;
+    // Debug: Check if each element exists
+    const sessionNameEl = document.getElementById('sessionName');
+    const numPlayersEl = document.getElementById('numPlayers');
+    const startingScoreEl = document.getElementById('startingScore');
+    const allowDecimalsEl = document.getElementById('allowDecimals');
+    const targetScoreEl = document.getElementById('targetScore');
+    const playAfterTargetEl = document.getElementById('playAfterTarget');
+    
+    console.log('Form elements found:', {
+        sessionName: !!sessionNameEl,
+        numPlayers: !!numPlayersEl,
+        startingScore: !!startingScoreEl,
+        allowDecimals: !!allowDecimalsEl,
+        targetScore: !!targetScoreEl,
+        playAfterTarget: !!playAfterTargetEl
+    });
+    
+    if (!numPlayersEl) {
+        console.error('numPlayers element not found!');
+        return;
+    }
+    
+    const sessionName = sessionNameEl ? sessionNameEl.value || 'Game Session' : 'Game Session';
+    const playerCount = numPlayersEl ? parseInt(numPlayersEl.value) : 2;
+    const startingScore = startingScoreEl ? parseFloat(startingScoreEl.value) || 0 : 0;
+    const allowDecimals = allowDecimalsEl ? allowDecimalsEl.checked : false;
+    const targetScore = targetScoreEl ? parseFloat(targetScoreEl.value) || null : null;
+    const playAfterTarget = playAfterTargetEl ? playAfterTargetEl.checked : false;
     
     const sessionData = {
         name: sessionName,
