@@ -1,4 +1,4 @@
-// GameScore Pro JavaScript with Game Summary and Analytics
+// GameScore Pro - Complete Working Version
 
 class GameScorePro {
     constructor() {
@@ -19,7 +19,6 @@ class GameScorePro {
             sessionStartTime: null
         };
         
-        this.firebaseService = null;
         this.sessionListener = null;
         this.eventListenersAttached = false;
         this.chart = null;
@@ -49,6 +48,7 @@ class GameScorePro {
             const script = document.createElement('script');
             script.src = 'https://cdn.jsdelivr.net/npm/chart.js';
             script.onload = resolve;
+            script.onerror = resolve; // Continue even if Chart.js fails to load
             document.head.appendChild(script);
         });
     }
@@ -78,18 +78,23 @@ class GameScorePro {
     // Initialize Firebase Service
     async initializeFirebase() {
         try {
-            this.firebaseService = new FirebaseService();
-            const initialized = await this.firebaseService.initialize();
-            
-            if (initialized) {
-                console.log('Firebase integration enabled');
-                this.gameState.isOnline = true;
+            if (window.firebaseService) {
+                const initialized = await window.firebaseService.initialize();
                 
-                this.firebaseService.onConnectionChange((isOnline) => {
-                    this.gameState.isOnline = isOnline;
-                });
+                if (initialized) {
+                    console.log('Firebase integration enabled');
+                    this.gameState.isOnline = true;
+                    
+                    // Set up connection change listener
+                    window.firebaseService.onConnectionChange((isOnline) => {
+                        this.gameState.isOnline = isOnline;
+                    });
+                } else {
+                    console.log('Running in offline mode');
+                    this.gameState.isOnline = false;
+                }
             } else {
-                console.log('Running in offline mode');
+                console.log('Firebase service not available');
                 this.gameState.isOnline = false;
             }
         } catch (error) {
@@ -162,8 +167,8 @@ class GameScorePro {
         this.gameState.sessionStartTime = Date.now();
 
         try {
-            if (this.firebaseService && this.firebaseService.isAvailable()) {
-                const sessionCode = await this.firebaseService.createSession({
+            if (window.firebaseService && window.firebaseService.isAvailable()) {
+                const sessionCode = await window.firebaseService.createSession({
                     ...sessionData,
                     players: this.initializePlayers(sessionData.numPlayers, sessionData.startingScore),
                     sessionStartTime: this.gameState.sessionStartTime
@@ -171,7 +176,7 @@ class GameScorePro {
                 
                 this.gameState.sessionCode = sessionCode;
                 
-                this.firebaseService.listenToSession(sessionCode, (sessionData) => {
+                window.firebaseService.listenToSession(sessionCode, (sessionData) => {
                     if (sessionData) {
                         this.updateGameStateFromFirebase(sessionData);
                     }
@@ -250,7 +255,7 @@ class GameScorePro {
                             <p>Session: <strong>${this.gameState.sessionCode}</strong></p>
                         </div>
                         <div class="header-right">
-                            <div id="connectionStatus4" class="connection-status">
+                            <div class="connection-status">
                                 <span class="status-dot"></span>
                                 <span class="status-text">Connecting...</span>
                             </div>
@@ -351,29 +356,33 @@ class GameScorePro {
         const presetButtons = tile.querySelectorAll('.preset-btn');
         const playerNameElement = tile.querySelector('.player-name');
 
+        // Increase score button
         increaseBtn?.addEventListener('click', (e) => {
             e.stopPropagation();
             const amount = parseFloat(customAmountInput?.value || 1);
             this.updatePlayerScore(playerId, amount);
         });
 
+        // Decrease score button
         decreaseBtn?.addEventListener('click', (e) => {
             e.stopPropagation();
             const amount = parseFloat(customAmountInput?.value || 1);
             this.updatePlayerScore(playerId, -amount);
         });
 
+        // Preset buttons
         presetButtons?.forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const amount = parseFloat(btn.getAttribute('data-amount'));
                 if (amount > 0) {
-                    customAmountInput.value = amount;
+                    customAmountInput.value = Math.abs(amount);
                 }
                 this.updatePlayerScore(playerId, amount);
             });
         });
 
+        // Player name editing
         playerNameElement?.addEventListener('blur', (e) => {
             const newName = e.target.textContent.trim();
             if (newName && newName !== this.getPlayer(playerId)?.name) {
@@ -400,6 +409,7 @@ class GameScorePro {
         const oldScore = player.score;
         const newScore = Math.max(0, oldScore + amount);
         
+        // Update local state immediately for responsive UI
         player.score = newScore;
         this.updatePlayerTileScore(playerId, newScore);
         
@@ -413,13 +423,16 @@ class GameScorePro {
             timestamp: Date.now()
         });
 
-        if (this.firebaseService && this.firebaseService.isAvailable()) {
+        // Update Firebase if available
+        if (window.firebaseService && window.firebaseService.isAvailable()) {
             try {
-                await this.firebaseService.updatePlayerScore(this.gameState.sessionCode, playerId, newScore);
+                await window.firebaseService.updatePlayerScore(this.gameState.sessionCode, playerId, newScore);
             } catch (error) {
                 console.error('Failed to update score in Firebase:', error);
+                // Revert local change on Firebase error
                 player.score = oldScore;
                 this.updatePlayerTileScore(playerId, oldScore);
+                this.showMessage('Failed to update score. Please try again.', 'error');
             }
         }
 
@@ -441,12 +454,13 @@ class GameScorePro {
             }
         });
 
-        if (this.firebaseService && this.firebaseService.isAvailable()) {
+        if (window.firebaseService && window.firebaseService.isAvailable()) {
             try {
-                await this.firebaseService.updatePlayerName(this.gameState.sessionCode, playerId, newName);
+                await window.firebaseService.updatePlayerName(this.gameState.sessionCode, playerId, newName);
             } catch (error) {
                 console.error('Failed to update name in Firebase:', error);
                 player.name = oldName;
+                this.showMessage('Failed to update name. Please try again.', 'error');
             }
         }
     }
@@ -463,6 +477,7 @@ class GameScorePro {
         if (scoreElement) {
             scoreElement.textContent = newScore;
             
+            // Add animation
             scoreElement.classList.add('score-updated');
             setTimeout(() => {
                 scoreElement.classList.remove('score-updated');
@@ -508,7 +523,7 @@ class GameScorePro {
                     <div class="tab-content">
                         <div id="chartTab" class="tab-panel active">
                             <div class="chart-container">
-                                <canvas id="scoreChart"></canvas>
+                                ${window.Chart ? '<canvas id="scoreChart"></canvas>' : '<p>Chart.js not available. Install Chart.js to see score progression graph.</p>'}
                             </div>
                         </div>
                         
@@ -527,7 +542,7 @@ class GameScorePro {
                     
                     <div class="summary-actions">
                         <button id="exportSummaryBtn" class="primary-btn">📊 Export Summary</button>
-                        <button id="exportChartBtn" class="secondary-btn">📈 Export Chart</button>
+                        ${window.Chart ? '<button id="exportChartBtn" class="secondary-btn">📈 Export Chart</button>' : ''}
                     </div>
                 </div>
             </div>
@@ -538,10 +553,12 @@ class GameScorePro {
         // Initialize tabs
         this.initializeSummaryTabs(modal);
 
-        // Create chart
-        setTimeout(() => {
-            this.createScoreChart();
-        }, 100);
+        // Create chart if Chart.js is available
+        if (window.Chart) {
+            setTimeout(() => {
+                this.createScoreChart();
+            }, 100);
+        }
 
         // Bind events
         modal.querySelector('.modal-close').addEventListener('click', () => {
@@ -553,9 +570,12 @@ class GameScorePro {
             this.exportSummaryReport();
         });
 
-        modal.querySelector('#exportChartBtn').addEventListener('click', () => {
-            this.exportChart();
-        });
+        const exportChartBtn = modal.querySelector('#exportChartBtn');
+        if (exportChartBtn) {
+            exportChartBtn.addEventListener('click', () => {
+                this.exportChart();
+            });
+        }
 
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
@@ -885,8 +905,8 @@ class GameScorePro {
         }
 
         try {
-            if (this.firebaseService && this.firebaseService.isAvailable()) {
-                const sessionData = await this.firebaseService.joinSession(sessionCode);
+            if (window.firebaseService && window.firebaseService.isAvailable()) {
+                const sessionData = await window.firebaseService.joinSession(sessionCode);
                 
                 this.gameState = {
                     ...this.gameState,
@@ -908,7 +928,7 @@ class GameScorePro {
 
     // Show Player View (Read-only)
     showPlayerView() {
-        this.showMessage('Player view not yet implemented in this version.', 'info');
+        this.showMessage('Player view functionality will be implemented in a future update.', 'info');
     }
 
     // Utility Functions
@@ -981,13 +1001,13 @@ class GameScorePro {
             });
         });
 
-        if (this.firebaseService && this.firebaseService.isAvailable()) {
+        if (window.firebaseService && window.firebaseService.isAvailable()) {
             try {
                 const updates = {};
                 this.gameState.players.forEach(player => {
                     updates[`players/${player.id}/score`] = startingScore;
                 });
-                await this.firebaseService.updateSession(this.gameState.sessionCode, updates);
+                await window.firebaseService.updateSession(this.gameState.sessionCode, updates);
             } catch (error) {
                 console.error('Failed to reset scores in Firebase:', error);
             }
@@ -1003,9 +1023,9 @@ class GameScorePro {
     async endSession() {
         if (!confirm('Are you sure you want to end this session?')) return;
 
-        if (this.firebaseService && this.firebaseService.isAvailable()) {
+        if (window.firebaseService && window.firebaseService.isAvailable()) {
             try {
-                await this.firebaseService.endSession(this.gameState.sessionCode);
+                await window.firebaseService.endSession(this.gameState.sessionCode);
             } catch (error) {
                 console.error('Failed to end session in Firebase:', error);
             }
@@ -1078,8 +1098,8 @@ class GameScorePro {
     // Cleanup
     cleanup() {
         this.destroyChart();
-        if (this.firebaseService) {
-            this.firebaseService.cleanup();
+        if (window.firebaseService) {
+            window.firebaseService.cleanup();
         }
     }
 }

@@ -1,8 +1,6 @@
-// Firebase Configuration
-// This file contains the Firebase setup and configuration
+// Firebase Configuration for GameScore Pro
+// Replace with your actual Firebase project credentials
 
-// Firebase configuration object
-// Note: These are public configuration values that are safe to expose in client-side code
 const firebaseConfig = {
     apiKey: "AIzaSyD6-GCVT9CfSCcZzmN1hro1d0FVGpImTkk",
     authDomain: "kappscore.firebaseapp.com",
@@ -14,242 +12,189 @@ const firebaseConfig = {
     measurementId: "G-7MREYWZRCX"
 };
 
-// Firebase Database Service Class
+// Firebase Service Class
 class FirebaseService {
     constructor() {
         this.app = null;
         this.database = null;
-        this.isInitialized = false;
-        this.isOnline = false;
-        this.sessionRef = null;
-        this.listeners = new Map();
+        this.isConnected = false;
+        this.connectionCallbacks = [];
     }
 
-    // Initialize Firebase
     async initialize() {
         try {
-            // Check if Firebase is available
-            if (typeof firebase === 'undefined') {
-                console.warn('Firebase SDK not loaded. Running in offline mode.');
-                return false;
-            }
-
-            // Initialize Firebase app
+            // Initialize Firebase
             this.app = firebase.initializeApp(firebaseConfig);
             this.database = firebase.database();
+            
+            console.log('Firebase initialized successfully');
             
             // Set up connection monitoring
             this.setupConnectionMonitoring();
             
-            this.isInitialized = true;
-            console.log('Firebase initialized successfully');
             return true;
         } catch (error) {
             console.error('Firebase initialization failed:', error);
-            console.warn('Running in offline mode');
             return false;
         }
     }
 
-    // Monitor connection status
     setupConnectionMonitoring() {
         const connectedRef = this.database.ref('.info/connected');
         connectedRef.on('value', (snapshot) => {
-            this.isOnline = snapshot.val() === true;
-            console.log('Firebase connection status:', this.isOnline ? 'Online' : 'Offline');
+            const isConnected = snapshot.val();
+            this.isConnected = isConnected;
             
-            // Notify app of connection status change
-            if (window.app) {
-                window.app.onConnectionStatusChange(this.isOnline);
-            }
-        });
-    }
-
-    // Create a new game session
-    async createSession(sessionData) {
-        if (!this.isInitialized || !this.isOnline) {
-            throw new Error('Firebase not available. Cannot create session.');
-        }
-
-        try {
-            // Generate unique session ID
-            const sessionId = this.generateSessionId();
+            // Update connection status in UI
+            this.updateConnectionStatus(isConnected);
             
-            // Prepare session data
-            const gameSession = {
-                ...sessionData,
-                sessionId: sessionId,
-                createdAt: firebase.database.ServerValue.TIMESTAMP,
-                lastUpdated: firebase.database.ServerValue.TIMESTAMP,
-                isActive: true,
-                createdBy: 'scorekeeper'
-            };
-
-            // Save to Firebase
-            await this.database.ref(`sessions/${sessionId}`).set(gameSession);
-            
-            console.log('Session created successfully:', sessionId);
-            return sessionId;
-        } catch (error) {
-            console.error('Error creating session:', error);
-            throw error;
-        }
-    }
-
-    // Join an existing session
-    async joinSession(sessionId) {
-        if (!this.isInitialized || !this.isOnline) {
-            throw new Error('Firebase not available. Cannot join session.');
-        }
-
-        try {
-            // Check if session exists
-            const snapshot = await this.database.ref(`sessions/${sessionId}`).once('value');
-            
-            if (!snapshot.exists()) {
-                throw new Error('Session not found');
-            }
-
-            const sessionData = snapshot.val();
-            
-            if (!sessionData.isActive) {
-                throw new Error('Session is no longer active');
-            }
-
-            console.log('Successfully joined session:', sessionId);
-            return sessionData;
-        } catch (error) {
-            console.error('Error joining session:', error);
-            throw error;
-        }
-    }
-
-    // Listen to session updates
-    listenToSession(sessionId, callback) {
-        if (!this.isInitialized || !this.isOnline) {
-            console.warn('Firebase not available. Cannot listen to session updates.');
-            return null;
-        }
-
-        try {
-            this.sessionRef = this.database.ref(`sessions/${sessionId}`);
-            
-            const listener = this.sessionRef.on('value', (snapshot) => {
-                if (snapshot.exists()) {
-                    const sessionData = snapshot.val();
-                    callback(sessionData);
-                } else {
-                    callback(null);
+            // Notify callbacks
+            this.connectionCallbacks.forEach(callback => {
+                try {
+                    callback(isConnected);
+                } catch (error) {
+                    console.error('Connection callback error:', error);
                 }
             });
-
-            // Store listener for cleanup
-            this.listeners.set(sessionId, listener);
             
-            console.log('Listening to session updates:', sessionId);
-            return listener;
-        } catch (error) {
-            console.error('Error setting up session listener:', error);
-            return null;
-        }
+            console.log('Firebase connection status:', isConnected ? 'Online' : 'Offline');
+        });
     }
 
-    // Update session data
-    async updateSession(sessionId, updates) {
-        if (!this.isInitialized || !this.isOnline) {
-            throw new Error('Firebase not available. Cannot update session.');
-        }
+    updateConnectionStatus(isConnected) {
+        const statusElements = document.querySelectorAll('.connection-status');
+        statusElements.forEach(element => {
+            const dot = element.querySelector('.status-dot');
+            const text = element.querySelector('.status-text');
+            
+            if (dot && text) {
+                if (isConnected) {
+                    dot.className = 'status-dot online';
+                    text.textContent = 'Online';
+                } else {
+                    dot.className = 'status-dot offline';
+                    text.textContent = 'Offline';
+                }
+            }
+        });
+    }
 
-        try {
-            const updateData = {
-                ...updates,
-                lastUpdated: firebase.database.ServerValue.TIMESTAMP
+    onConnectionChange(callback) {
+        this.connectionCallbacks.push(callback);
+    }
+
+    isAvailable() {
+        return this.database !== null;
+    }
+
+    async createSession(sessionData) {
+        if (!this.isAvailable()) throw new Error('Firebase not available');
+        
+        const sessionCode = this.generateSessionCode();
+        const sessionRef = this.database.ref(`sessions/${sessionCode}`);
+        
+        const fullSessionData = {
+            metadata: {
+                name: sessionData.sessionName || 'Game Session',
+                createdAt: firebase.database.ServerValue.TIMESTAMP,
+                createdBy: 'scorekeeper',
+                playerCount: sessionData.numPlayers,
+                settings: {
+                    startingScore: sessionData.startingScore,
+                    allowDecimals: sessionData.allowDecimals,
+                    targetScore: sessionData.targetScore,
+                    playAfterTarget: sessionData.playAfterTarget
+                }
+            },
+            players: this.convertPlayersToObject(sessionData.players),
+            scoreHistory: [],
+            status: 'active'
+        };
+        
+        await sessionRef.set(fullSessionData);
+        console.log('Session created successfully:', sessionCode);
+        return sessionCode;
+    }
+
+    convertPlayersToObject(playersArray) {
+        const playersObject = {};
+        playersArray.forEach(player => {
+            playersObject[player.id] = {
+                name: player.name,
+                score: player.score,
+                joinedAt: firebase.database.ServerValue.TIMESTAMP,
+                isActive: true
             };
-
-            await this.database.ref(`sessions/${sessionId}`).update(updateData);
-            console.log('Session updated successfully');
-        } catch (error) {
-            console.error('Error updating session:', error);
-            throw error;
-        }
+        });
+        return playersObject;
     }
 
-    // Update player score
-    async updatePlayerScore(sessionId, playerId, newScore) {
-        if (!this.isInitialized || !this.isOnline) {
-            throw new Error('Firebase not available. Cannot update score.');
+    async joinSession(sessionCode) {
+        if (!this.isAvailable()) throw new Error('Firebase not available');
+        
+        const sessionRef = this.database.ref(`sessions/${sessionCode}`);
+        const snapshot = await sessionRef.once('value');
+        
+        if (!snapshot.exists()) {
+            throw new Error('Session not found');
         }
-
-        try {
-            const updates = {};
-            updates[`players/${playerId}/score`] = newScore;
-            updates['lastUpdated'] = firebase.database.ServerValue.TIMESTAMP;
-
-            await this.database.ref(`sessions/${sessionId}`).update(updates);
-            console.log('Player score updated successfully');
-        } catch (error) {
-            console.error('Error updating player score:', error);
-            throw error;
-        }
+        
+        const sessionData = snapshot.val();
+        return {
+            sessionName: sessionData.metadata.name,
+            players: Object.keys(sessionData.players || {}).map(playerId => ({
+                id: playerId,
+                name: sessionData.players[playerId].name,
+                score: sessionData.players[playerId].score
+            })),
+            settings: sessionData.metadata.settings
+        };
     }
 
-    // Update player name
-    async updatePlayerName(sessionId, playerId, newName) {
-        if (!this.isInitialized || !this.isOnline) {
-            throw new Error('Firebase not available. Cannot update player name.');
-        }
-
-        try {
-            const updates = {};
-            updates[`players/${playerId}/name`] = newName;
-            updates['lastUpdated'] = firebase.database.ServerValue.TIMESTAMP;
-
-            await this.database.ref(`sessions/${sessionId}`).update(updates);
-            console.log('Player name updated successfully');
-        } catch (error) {
-            console.error('Error updating player name:', error);
-            throw error;
-        }
-    }
-
-    // End session
-    async endSession(sessionId) {
-        if (!this.isInitialized || !this.isOnline) {
-            throw new Error('Firebase not available. Cannot end session.');
-        }
-
-        try {
-            await this.database.ref(`sessions/${sessionId}`).update({
-                isActive: false,
-                endedAt: firebase.database.ServerValue.TIMESTAMP,
-                lastUpdated: firebase.database.ServerValue.TIMESTAMP
-            });
-            
-            console.log('Session ended successfully');
-        } catch (error) {
-            console.error('Error ending session:', error);
-            throw error;
-        }
-    }
-
-    // Clean up listeners
-    cleanup() {
-        if (this.sessionRef) {
-            this.sessionRef.off();
-            this.sessionRef = null;
-        }
-
-        this.listeners.forEach((listener, sessionId) => {
-            this.database.ref(`sessions/${sessionId}`).off('value', listener);
+    listenToSession(sessionCode, callback) {
+        if (!this.isAvailable()) return;
+        
+        const sessionRef = this.database.ref(`sessions/${sessionCode}`);
+        sessionRef.on('value', (snapshot) => {
+            if (snapshot.exists()) {
+                callback(snapshot.val());
+            }
         });
         
-        this.listeners.clear();
-        console.log('Firebase listeners cleaned up');
+        console.log('Listening to session updates:', sessionCode);
     }
 
-    // Generate unique session ID
-    generateSessionId() {
-        // Generate a 6-character alphanumeric code
+    async updatePlayerScore(sessionCode, playerId, newScore) {
+        if (!this.isAvailable()) throw new Error('Firebase not available');
+        
+        const playerRef = this.database.ref(`sessions/${sessionCode}/players/${playerId}/score`);
+        await playerRef.set(newScore);
+        console.log('Player score updated successfully');
+    }
+
+    async updatePlayerName(sessionCode, playerId, newName) {
+        if (!this.isAvailable()) throw new Error('Firebase not available');
+        
+        const playerRef = this.database.ref(`sessions/${sessionCode}/players/${playerId}/name`);
+        await playerRef.set(newName);
+        console.log('Player name updated successfully');
+    }
+
+    async updateSession(sessionCode, updates) {
+        if (!this.isAvailable()) throw new Error('Firebase not available');
+        
+        const sessionRef = this.database.ref(`sessions/${sessionCode}`);
+        await sessionRef.update(updates);
+    }
+
+    async endSession(sessionCode) {
+        if (!this.isAvailable()) throw new Error('Firebase not available');
+        
+        const sessionRef = this.database.ref(`sessions/${sessionCode}/status`);
+        await sessionRef.set('ended');
+    }
+
+    generateSessionCode() {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
         let result = '';
         for (let i = 0; i < 6; i++) {
@@ -258,21 +203,14 @@ class FirebaseService {
         return result;
     }
 
-    // Check if Firebase is available and online
-    isAvailable() {
-        return this.isInitialized && this.isOnline;
-    }
-
-    // Get connection status
-    getConnectionStatus() {
-        return {
-            initialized: this.isInitialized,
-            online: this.isOnline,
-            available: this.isAvailable()
-        };
+    cleanup() {
+        if (this.database) {
+            this.database.ref('.info/connected').off();
+        }
+        console.log('Firebase listeners cleaned up');
     }
 }
 
-// Export for use in main application
-window.FirebaseService = FirebaseService;
+// Initialize Firebase Service globally
+window.firebaseService = new FirebaseService();
 
