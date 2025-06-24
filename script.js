@@ -193,34 +193,34 @@ function handleCreateSession(e) {
     e.preventDefault();
     console.log('Create session form submitted');
     
-    // Debug: Check if each element exists
+    // Use the actual IDs and names from the live form
     const sessionNameEl = document.getElementById('sessionName');
-    const numPlayersEl = document.getElementById('numPlayers');
+    const playerCountEl = document.getElementById('playerCount'); // This is the correct ID
     const startingScoreEl = document.getElementById('startingScore');
-    const allowDecimalsEl = document.getElementById('allowDecimals');
+    const allowDecimalsEl = document.querySelector('input[name="allowDecimals"]'); // Use name since no ID
     const targetScoreEl = document.getElementById('targetScore');
-    const playAfterTargetEl = document.getElementById('playAfterTarget');
+    const continueAfterTargetEl = document.querySelector('input[name="continueAfterTarget"]'); // Use name since no ID
     
     console.log('Form elements found:', {
         sessionName: !!sessionNameEl,
-        numPlayers: !!numPlayersEl,
+        playerCount: !!playerCountEl,
         startingScore: !!startingScoreEl,
         allowDecimals: !!allowDecimalsEl,
         targetScore: !!targetScoreEl,
-        playAfterTarget: !!playAfterTargetEl
+        continueAfterTarget: !!continueAfterTargetEl
     });
     
-    if (!numPlayersEl) {
-        console.error('numPlayers element not found!');
+    if (!playerCountEl) {
+        console.error('playerCount element not found!');
         return;
     }
     
     const sessionName = sessionNameEl ? sessionNameEl.value || 'Game Session' : 'Game Session';
-    const playerCount = numPlayersEl ? parseInt(numPlayersEl.value) : 2;
+    const playerCount = playerCountEl ? parseInt(playerCountEl.value) : 2;
     const startingScore = startingScoreEl ? parseFloat(startingScoreEl.value) || 0 : 0;
     const allowDecimals = allowDecimalsEl ? allowDecimalsEl.checked : false;
     const targetScore = targetScoreEl ? parseFloat(targetScoreEl.value) || null : null;
-    const playAfterTarget = playAfterTargetEl ? playAfterTargetEl.checked : false;
+    const continueAfterTarget = continueAfterTargetEl ? continueAfterTargetEl.checked : false;
     
     const sessionData = {
         name: sessionName,
@@ -228,7 +228,7 @@ function handleCreateSession(e) {
         startingScore: startingScore,
         allowDecimals: allowDecimals,
         targetScore: targetScore,
-        continueAfterTarget: playAfterTarget
+        continueAfterTarget: continueAfterTarget
     };
     
     console.log('Session data:', sessionData);
