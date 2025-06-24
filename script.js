@@ -1,7 +1,6 @@
-// Rummy Scorekeeper JavaScript with Firebase Integration
-// Handles navigation, form interactions, and real-time functionality
+// GameScore Pro JavaScript with Fixed Player Management and Real-time Features
 
-class RummyScorekeeper {
+class GameScorePro {
     constructor() {
         this.currentPage = 'landingPage';
         this.gameState = {
@@ -15,20 +14,45 @@ class RummyScorekeeper {
             playAfterTarget: false,
             isScorekeeper: false,
             currentPlayerName: '',
-            isOnline: false
+            isOnline: false,
+            scoreHistory: []
         };
         
         this.firebaseService = null;
         this.sessionListener = null;
+        this.eventListenersAttached = false;
         this.init();
     }
 
     async init() {
+        this.initializeTheme();
         this.bindEvents();
         this.showPage('landingPage');
         
         // Initialize Firebase
         await this.initializeFirebase();
+    }
+
+    // Theme Management
+    initializeTheme() {
+        const savedTheme = localStorage.getItem('gameScoreProTheme') || 'light';
+        this.setTheme(savedTheme);
+    }
+
+    toggleTheme() {
+        const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+        this.setTheme(newTheme);
+    }
+
+    setTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('gameScoreProTheme', theme);
+        
+        const themeIcons = document.querySelectorAll('.theme-icon');
+        themeIcons.forEach(icon => {
+            icon.textContent = theme === 'light' ? '🌙' : '☀️';
+        });
     }
 
     // Initialize Firebase Service
@@ -39,662 +63,465 @@ class RummyScorekeeper {
             
             if (initialized) {
                 console.log('Firebase integration enabled');
-                this.updateConnectionStatus(true);
+                this.gameState.isOnline = true;
+                
+                // Register for connection status updates
+                this.firebaseService.onConnectionChange((isOnline) => {
+                    this.gameState.isOnline = isOnline;
+                });
             } else {
                 console.log('Running in offline mode');
-                this.updateConnectionStatus(false);
+                this.gameState.isOnline = false;
             }
         } catch (error) {
             console.error('Firebase initialization error:', error);
-            this.updateConnectionStatus(false);
-        }
-    }
-
-    // Update connection status in UI
-    updateConnectionStatus(isOnline) {
-        this.gameState.isOnline = isOnline;
-        
-        // Add connection indicator to header
-        const headers = document.querySelectorAll('header');
-        headers.forEach(header => {
-            let indicator = header.querySelector('.connection-status');
-            if (!indicator) {
-                indicator = document.createElement('div');
-                indicator.className = 'connection-status';
-                header.appendChild(indicator);
-            }
-            
-            indicator.textContent = isOnline ? '🟢 Online' : '🔴 Offline';
-            indicator.style.cssText = `
-                position: absolute;
-                top: 1rem;
-                right: 1rem;
-                font-size: 0.8rem;
-                color: ${isOnline ? '#10b981' : '#ef4444'};
-                font-weight: 600;
-            `;
-        });
-    }
-
-    // Firebase connection status change handler
-    onConnectionStatusChange(isOnline) {
-        this.updateConnectionStatus(isOnline);
-        
-        if (isOnline && this.gameState.sessionCode) {
-            // Reconnect to session if we have one
-            this.reconnectToSession();
-        }
-    }
-
-    // Reconnect to existing session
-    async reconnectToSession() {
-        if (!this.firebaseService || !this.gameState.sessionCode) return;
-        
-        try {
-            const sessionData = await this.firebaseService.joinSession(this.gameState.sessionCode);
-            this.handleSessionData(sessionData);
-        } catch (error) {
-            console.error('Failed to reconnect to session:', error);
+            this.gameState.isOnline = false;
         }
     }
 
     // Event Binding
     bindEvents() {
-        // Landing page navigation
-        document.getElementById('createSessionBtn').addEventListener('click', () => {
-            this.showPage('createSessionPage');
-        });
+        if (this.eventListenersAttached) return;
+        
+        // Landing page events
+        document.getElementById('createSessionBtn')?.addEventListener('click', () => this.showPage('createSessionPage'));
+        document.getElementById('joinSessionBtn')?.addEventListener('click', () => this.showPage('joinSessionPage'));
+        document.getElementById('themeToggle')?.addEventListener('click', () => this.toggleTheme());
+        document.getElementById('exportBtn')?.addEventListener('click', () => this.exportGameData());
 
-        document.getElementById('joinSessionBtn').addEventListener('click', () => {
-            this.showPage('joinSessionPage');
-        });
+        // Create session events
+        document.getElementById('backToLanding')?.addEventListener('click', () => this.showPage('landingPage'));
+        document.getElementById('increasePlayer')?.addEventListener('click', () => this.changePlayerCount(1));
+        document.getElementById('decreasePlayer')?.addEventListener('click', () => this.changePlayerCount(-1));
+        document.getElementById('createSessionForm')?.addEventListener('submit', (e) => this.handleCreateSession(e));
 
-        // Back buttons
-        document.getElementById('backToLanding').addEventListener('click', () => {
-            this.showPage('landingPage');
-        });
+        // Join session events
+        document.getElementById('backToLandingFromJoin')?.addEventListener('click', () => this.showPage('landingPage'));
+        document.getElementById('joinSessionForm')?.addEventListener('submit', (e) => this.handleJoinSession(e));
 
-        document.getElementById('backToLandingFromJoin').addEventListener('click', () => {
-            this.showPage('landingPage');
-        });
-
-        // Player number controls
-        document.getElementById('decreasePlayer').addEventListener('click', () => {
-            this.changePlayerCount(-1);
-        });
-
-        document.getElementById('increasePlayer').addEventListener('click', () => {
-            this.changePlayerCount(1);
-        });
-
-        // Form submissions
-        document.getElementById('createSessionForm').addEventListener('submit', (e) => {
-            this.handleCreateSession(e);
-        });
-
-        document.getElementById('joinSessionForm').addEventListener('submit', (e) => {
-            this.handleJoinSession(e);
-        });
-
-        // Decimal checkbox
-        document.getElementById('allowDecimals').addEventListener('change', (e) => {
-            this.updateScoreStep(e.target.checked);
-        });
-
-        // Modal controls
-        document.getElementById('showQRBtn').addEventListener('click', () => {
-            this.showQRModal();
-        });
-
-        document.getElementById('closeQRModal').addEventListener('click', () => {
-            this.hideQRModal();
-        });
-
-        // Game controls
-        document.getElementById('resetScoresBtn').addEventListener('click', () => {
-            this.resetAllScores();
-        });
-
-        document.getElementById('newRoundBtn').addEventListener('click', () => {
-            this.newRound();
-        });
-
-        document.getElementById('endSessionBtn').addEventListener('click', () => {
-            this.endSession();
-        });
-
-        // Player controls
-        document.getElementById('editNameBtn').addEventListener('click', () => {
-            this.editPlayerName();
-        });
-
-        document.getElementById('leaveSessionBtn').addEventListener('click', () => {
-            this.leaveSession();
-        });
-
-        // QR Scanner (placeholder)
-        document.getElementById('scanQRBtn').addEventListener('click', () => {
-            this.scanQRCode();
-        });
-
-        // Modal background click to close
-        document.getElementById('qrModal').addEventListener('click', (e) => {
-            if (e.target.id === 'qrModal') {
-                this.hideQRModal();
-            }
-        });
+        this.eventListenersAttached = true;
     }
 
     // Page Navigation
     showPage(pageId) {
-        // Hide all pages
         document.querySelectorAll('.page').forEach(page => {
             page.classList.remove('active');
         });
-
-        // Show target page
-        document.getElementById(pageId).classList.add('active');
-        this.currentPage = pageId;
-
-        // Add fade-in animation
-        document.getElementById(pageId).classList.add('fade-in');
-        setTimeout(() => {
-            document.getElementById(pageId).classList.remove('fade-in');
-        }, 300);
+        
+        const targetPage = document.getElementById(pageId);
+        if (targetPage) {
+            targetPage.classList.add('active');
+            this.currentPage = pageId;
+        }
     }
 
     // Player Count Management
     changePlayerCount(delta) {
         const input = document.getElementById('numPlayers');
-        let newValue = parseInt(input.value) + delta;
-        
-        // Clamp between 1 and 12
-        newValue = Math.max(1, Math.min(12, newValue));
-        
+        const currentValue = parseInt(input.value);
+        const newValue = Math.max(1, Math.min(12, currentValue + delta));
         input.value = newValue;
         this.gameState.numPlayers = newValue;
     }
 
-    // Score Step Management
-    updateScoreStep(allowDecimals) {
-        const startingScoreInput = document.getElementById('startingScore');
-        const targetScoreInput = document.getElementById('targetScore');
-        
-        if (allowDecimals) {
-            startingScoreInput.step = '0.1';
-            targetScoreInput.step = '0.1';
-        } else {
-            startingScoreInput.step = '1';
-            targetScoreInput.step = '1';
-        }
-        
-        this.gameState.allowDecimals = allowDecimals;
-    }
-
     // Session Creation
-    async handleCreateSession(e) {
-        e.preventDefault();
+    async handleCreateSession(event) {
+        event.preventDefault();
         
-        // Show loading state
-        const submitBtn = e.target.querySelector('button[type="submit"]');
-        const originalText = submitBtn.textContent;
-        submitBtn.textContent = 'Creating Session...';
-        submitBtn.disabled = true;
-        
-        try {
-            // Collect form data
-            this.gameState.numPlayers = parseInt(document.getElementById('numPlayers').value);
-            this.gameState.sessionName = document.getElementById('sessionName').value || 'Rummy Game';
-            this.gameState.startingScore = parseFloat(document.getElementById('startingScore').value);
-            this.gameState.allowDecimals = document.getElementById('allowDecimals').checked;
-            this.gameState.targetScore = document.getElementById('targetScore').value ? 
-                parseFloat(document.getElementById('targetScore').value) : null;
-            this.gameState.playAfterTarget = document.getElementById('playAfterTarget').checked;
-            this.gameState.isScorekeeper = true;
-
-            // Initialize players
-            this.initializePlayers();
-
-            // Create session in Firebase or locally
-            if (this.firebaseService && this.firebaseService.isAvailable()) {
-                await this.createFirebaseSession();
-            } else {
-                this.createLocalSession();
-            }
-
-            // Show scorekeeper interface
-            this.setupScorekeeperInterface();
-            this.showPage('scorekeeperPage');
-            
-        } catch (error) {
-            console.error('Error creating session:', error);
-            alert('Failed to create session. Please try again.');
-        } finally {
-            // Reset button state
-            submitBtn.textContent = originalText;
-            submitBtn.disabled = false;
-        }
-    }
-
-    // Create Firebase session
-    async createFirebaseSession() {
+        const formData = new FormData(event.target);
         const sessionData = {
-            sessionName: this.gameState.sessionName,
-            numPlayers: this.gameState.numPlayers,
-            startingScore: this.gameState.startingScore,
-            allowDecimals: this.gameState.allowDecimals,
-            targetScore: this.gameState.targetScore,
-            playAfterTarget: this.gameState.playAfterTarget,
-            players: this.gameState.players
+            sessionName: document.getElementById('sessionName').value || 'Game Session',
+            numPlayers: parseInt(document.getElementById('numPlayers').value),
+            startingScore: parseFloat(document.getElementById('startingScore').value) || 0,
+            allowDecimals: document.getElementById('allowDecimals').checked,
+            targetScore: parseFloat(document.getElementById('targetScore').value) || null,
+            playAfterTarget: document.getElementById('playAfterTarget').checked
         };
 
-        this.gameState.sessionCode = await this.firebaseService.createSession(sessionData);
-        
-        // Start listening to session updates
-        this.sessionListener = this.firebaseService.listenToSession(
-            this.gameState.sessionCode, 
-            (sessionData) => this.handleSessionData(sessionData)
-        );
-    }
-
-    // Create local session (offline mode)
-    createLocalSession() {
-        this.gameState.sessionCode = this.generateSessionCode();
-        console.log('Created local session:', this.gameState.sessionCode);
-    }
-
-    // Handle session data updates from Firebase
-    handleSessionData(sessionData) {
-        if (!sessionData) {
-            console.warn('Session data is null');
-            return;
-        }
-
-        // Update local game state
-        this.gameState.players = sessionData.players || this.gameState.players;
-        this.gameState.sessionName = sessionData.sessionName || this.gameState.sessionName;
-        
-        // Update UI if we're on the scorekeeper or player view page
-        if (this.currentPage === 'scorekeeperPage') {
-            this.updateScorekeeperInterface();
-        } else if (this.currentPage === 'playerViewPage') {
-            this.updatePlayerViewInterface();
-        }
-    }
-
-    // Session Joining
-    async handleJoinSession(e) {
-        e.preventDefault();
-        
-        const joinCode = document.getElementById('joinCode').value.trim().toUpperCase();
-        const playerName = document.getElementById('playerName').value.trim();
-
-        if (!joinCode || !playerName) {
-            alert('Please enter both session code and your name.');
-            return;
-        }
-
-        // Show loading state
-        const submitBtn = e.target.querySelector('button[type="submit"]');
-        const originalText = submitBtn.textContent;
-        submitBtn.textContent = 'Joining Session...';
-        submitBtn.disabled = true;
+        // Update game state
+        Object.assign(this.gameState, sessionData);
+        this.gameState.isScorekeeper = true;
 
         try {
-            // Try to join Firebase session or validate locally
             if (this.firebaseService && this.firebaseService.isAvailable()) {
-                await this.joinFirebaseSession(joinCode, playerName);
+                // Create session in Firebase
+                const sessionCode = await this.firebaseService.createSession({
+                    ...sessionData,
+                    players: this.initializePlayers(sessionData.numPlayers, sessionData.startingScore)
+                });
+                
+                this.gameState.sessionCode = sessionCode;
+                
+                // Listen for session updates
+                this.firebaseService.listenToSession(sessionCode, (sessionData) => {
+                    if (sessionData) {
+                        this.updateGameStateFromFirebase(sessionData);
+                    }
+                });
             } else {
-                this.joinLocalSession(joinCode, playerName);
+                // Offline mode
+                this.gameState.sessionCode = this.generateSessionCode();
+                this.gameState.players = this.initializePlayers(sessionData.numPlayers, sessionData.startingScore);
+                console.log('Created local session:', this.gameState.sessionCode);
             }
 
-            // Setup player view
-            this.setupPlayerView();
-            this.showPage('playerViewPage');
-            
+            this.showScorekeeperInterface();
         } catch (error) {
-            console.error('Error joining session:', error);
-            alert('Failed to join session. Please check the code and try again.');
-        } finally {
-            // Reset button state
-            submitBtn.textContent = originalText;
-            submitBtn.disabled = false;
+            console.error('Error creating session:', error);
+            this.showMessage('Failed to create session. Please try again.', 'error');
         }
     }
 
-    // Join Firebase session
-    async joinFirebaseSession(joinCode, playerName) {
-        const sessionData = await this.firebaseService.joinSession(joinCode);
-        
-        this.gameState.sessionCode = joinCode;
-        this.gameState.currentPlayerName = playerName;
-        this.gameState.isScorekeeper = false;
-        this.gameState.sessionName = sessionData.sessionName;
-        this.gameState.players = sessionData.players;
-        this.gameState.allowDecimals = sessionData.allowDecimals;
-
-        // Start listening to session updates
-        this.sessionListener = this.firebaseService.listenToSession(
-            joinCode, 
-            (sessionData) => this.handleSessionData(sessionData)
-        );
-    }
-
-    // Join local session (offline mode)
-    joinLocalSession(joinCode, playerName) {
-        if (this.validateSessionCode(joinCode)) {
-            this.gameState.sessionCode = joinCode;
-            this.gameState.currentPlayerName = playerName;
-            this.gameState.isScorekeeper = false;
-            
-            // Create dummy session data for offline mode
-            this.gameState.sessionName = 'Offline Game';
-            this.initializePlayers();
-        } else {
-            throw new Error('Invalid session code');
-        }
-    }
-
-    // Player Initialization
-    initializePlayers() {
-        this.gameState.players = [];
-        for (let i = 1; i <= this.gameState.numPlayers; i++) {
-            this.gameState.players.push({
-                id: i,
-                name: `Player ${i}`,
-                score: this.gameState.startingScore,
-                isEditing: false
+    // Initialize Players
+    initializePlayers(numPlayers, startingScore) {
+        const players = [];
+        for (let i = 0; i < numPlayers; i++) {
+            players.push({
+                id: `player${i + 1}`,
+                name: `Player ${i + 1}`,
+                score: startingScore,
+                joinedAt: Date.now()
             });
         }
+        return players;
     }
 
-    // Scorekeeper Interface Setup
-    setupScorekeeperInterface() {
-        // Update session title and code
-        document.getElementById('sessionTitle').textContent = this.gameState.sessionName;
-        document.getElementById('displaySessionCode').textContent = this.gameState.sessionCode;
+    // Show Scorekeeper Interface
+    showScorekeeperInterface() {
+        // Create scorekeeper page if it doesn't exist
+        let scorekeeperPage = document.getElementById('scorekeeperPage');
+        if (!scorekeeperPage) {
+            scorekeeperPage = this.createScorekeeperPage();
+            document.body.appendChild(scorekeeperPage);
+        }
 
-        // Generate player tiles
-        this.generatePlayerTiles('playersGrid', true);
+        this.generatePlayerTiles();
+        this.showPage('scorekeeperPage');
     }
 
-    // Update scorekeeper interface (for real-time updates)
-    updateScorekeeperInterface() {
-        this.generatePlayerTiles('playersGrid', true);
+    // Create Scorekeeper Page
+    createScorekeeperPage() {
+        const page = document.createElement('div');
+        page.id = 'scorekeeperPage';
+        page.className = 'page';
+        
+        page.innerHTML = `
+            <div class="container">
+                <header>
+                    <div class="header-content">
+                        <div class="header-left">
+                            <h1>${this.gameState.sessionName}</h1>
+                            <p>Session: <strong>${this.gameState.sessionCode}</strong></p>
+                        </div>
+                        <div class="header-right">
+                            <div id="connectionStatus4" class="connection-status">
+                                <span class="status-dot"></span>
+                                <span class="status-text">Connecting...</span>
+                            </div>
+                            <button id="showQRBtn" class="secondary-btn">📱 QR Code</button>
+                            <button class="theme-toggle" onclick="app.toggleTheme()" aria-label="Toggle dark mode">
+                                <span class="theme-icon">🌙</span>
+                            </button>
+                        </div>
+                    </div>
+                </header>
+                
+                <div id="playersGrid" class="players-grid" data-player-count="${this.gameState.numPlayers}">
+                    <!-- Player tiles will be generated here -->
+                </div>
+                
+                <div class="game-controls">
+                    <button id="resetScoresBtn" class="secondary-btn">🔄 Reset All Scores</button>
+                    <button id="newRoundBtn" class="secondary-btn">🎯 New Round</button>
+                    <button id="endSessionBtn" class="danger-btn">🏁 End Session</button>
+                </div>
+            </div>
+        `;
+
+        // Bind scorekeeper events
+        setTimeout(() => {
+            document.getElementById('showQRBtn')?.addEventListener('click', () => this.showQRCode());
+            document.getElementById('resetScoresBtn')?.addEventListener('click', () => this.resetAllScores());
+            document.getElementById('newRoundBtn')?.addEventListener('click', () => this.startNewRound());
+            document.getElementById('endSessionBtn')?.addEventListener('click', () => this.endSession());
+        }, 100);
+
+        return page;
     }
 
-    // Player View Setup
-    setupPlayerView() {
-        // Update session title and player name
-        document.getElementById('playerSessionTitle').textContent = this.gameState.sessionName || 'Game Session';
-        document.getElementById('currentPlayerName').textContent = this.gameState.currentPlayerName;
+    // Generate Player Tiles
+    generatePlayerTiles() {
+        const playersGrid = document.getElementById('playersGrid');
+        if (!playersGrid) return;
 
-        // Generate readonly player tiles
-        this.generatePlayerTiles('playerViewGrid', false);
-    }
+        // Set grid data attribute for responsive layout
+        playersGrid.setAttribute('data-player-count', this.gameState.players.length);
+        
+        playersGrid.innerHTML = '';
 
-    // Update player view interface (for real-time updates)
-    updatePlayerViewInterface() {
-        this.generatePlayerTiles('playerViewGrid', false);
-    }
-
-    // Player Tiles Generation
-    generatePlayerTiles(containerId, isEditable) {
-        const container = document.getElementById(containerId);
-        container.innerHTML = '';
-
-        this.gameState.players.forEach(player => {
-            const tile = this.createPlayerTile(player, isEditable);
-            container.appendChild(tile);
+        this.gameState.players.forEach((player, index) => {
+            const tile = this.createPlayerTile(player, true);
+            playersGrid.appendChild(tile);
         });
     }
 
-    // Individual Player Tile Creation
-    createPlayerTile(player, isEditable) {
+    // Create Player Tile
+    createPlayerTile(player, isEditable = false) {
         const tile = document.createElement('div');
         tile.className = 'player-tile';
-        tile.dataset.playerId = player.id;
+        tile.setAttribute('data-player-id', player.id);
 
-        const nameElement = document.createElement('div');
-        nameElement.className = 'player-name';
-        
+        const step = this.gameState.allowDecimals ? '0.1' : '1';
+
+        tile.innerHTML = `
+            <div class="player-header">
+                <h3 class="player-name" ${isEditable ? 'contenteditable="true"' : ''}>${player.name}</h3>
+            </div>
+            <div class="player-score">
+                <span class="score-value">${player.score}</span>
+            </div>
+            ${isEditable ? `
+                <div class="custom-amount-section">
+                    <label>Amount:</label>
+                    <input type="number" class="custom-amount" value="1" step="${step}" min="0">
+                    <div class="preset-buttons">
+                        <button class="preset-btn" data-amount="1">+1</button>
+                        <button class="preset-btn" data-amount="5">+5</button>
+                        <button class="preset-btn" data-amount="10">+10</button>
+                        <button class="preset-btn" data-amount="-1">-1</button>
+                    </div>
+                </div>
+                <div class="score-controls">
+                    <button class="score-btn decrease-btn" data-player-id="${player.id}">-</button>
+                    <button class="score-btn increase-btn" data-player-id="${player.id}">+</button>
+                </div>
+            ` : ''}
+        `;
+
         if (isEditable) {
-            nameElement.innerHTML = `
-                <input type="text" value="${player.name}" 
-                       onblur="app.updatePlayerName(${player.id}, this.value)"
-                       onkeypress="if(event.key==='Enter') this.blur()">
-            `;
-        } else {
-            nameElement.textContent = player.name;
-        }
-
-        const scoreElement = document.createElement('div');
-        scoreElement.className = 'score-display';
-        scoreElement.textContent = this.formatScore(player.score);
-
-        tile.appendChild(nameElement);
-        tile.appendChild(scoreElement);
-
-        if (isEditable) {
-            const controlsElement = document.createElement('div');
-            controlsElement.className = 'score-controls';
-            
-            const decreaseBtn = document.createElement('button');
-            decreaseBtn.className = 'score-btn';
-            decreaseBtn.textContent = '-';
-            decreaseBtn.onclick = () => this.updateScore(player.id, -1);
-
-            const increaseBtn = document.createElement('button');
-            increaseBtn.className = 'score-btn';
-            increaseBtn.textContent = '+';
-            increaseBtn.onclick = () => this.updateScore(player.id, 1);
-
-            controlsElement.appendChild(decreaseBtn);
-            controlsElement.appendChild(increaseBtn);
-            tile.appendChild(controlsElement);
+            // Bind events for this specific tile
+            setTimeout(() => {
+                this.bindPlayerTileEvents(tile, player.id);
+            }, 50);
         }
 
         return tile;
     }
 
-    // Score Management
-    async updateScore(playerId, delta) {
-        const player = this.gameState.players.find(p => p.id === playerId);
-        if (!player) return;
+    // Bind Player Tile Events
+    bindPlayerTileEvents(tile, playerId) {
+        // Score control buttons
+        const increaseBtn = tile.querySelector('.increase-btn');
+        const decreaseBtn = tile.querySelector('.decrease-btn');
+        const customAmountInput = tile.querySelector('.custom-amount');
+        const presetButtons = tile.querySelectorAll('.preset-btn');
+        const playerNameElement = tile.querySelector('.player-name');
 
-        const increment = this.gameState.allowDecimals ? 0.1 : 1;
-        const newScore = player.score + (delta * increment);
+        // Remove existing listeners to prevent duplicates
+        increaseBtn?.removeEventListener('click', this.handleScoreIncrease);
+        decreaseBtn?.removeEventListener('click', this.handleScoreDecrease);
+
+        // Add score control listeners
+        increaseBtn?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const amount = parseFloat(customAmountInput?.value || 1);
+            this.updatePlayerScore(playerId, amount);
+        });
+
+        decreaseBtn?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const amount = parseFloat(customAmountInput?.value || 1);
+            this.updatePlayerScore(playerId, -amount);
+        });
+
+        // Preset buttons
+        presetButtons?.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const amount = parseFloat(btn.getAttribute('data-amount'));
+                if (amount > 0) {
+                    customAmountInput.value = amount;
+                }
+                this.updatePlayerScore(playerId, amount);
+            });
+        });
+
+        // Player name editing
+        playerNameElement?.addEventListener('blur', (e) => {
+            const newName = e.target.textContent.trim();
+            if (newName && newName !== this.getPlayer(playerId)?.name) {
+                this.updatePlayerName(playerId, newName);
+            }
+        });
+
+        playerNameElement?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                e.target.blur();
+            }
+        });
+    }
+
+    // Update Player Score
+    async updatePlayerScore(playerId, amount) {
+        const player = this.getPlayer(playerId);
+        if (!player) {
+            console.error('Player not found:', playerId);
+            return;
+        }
+
+        const oldScore = player.score;
+        const newScore = Math.max(0, oldScore + amount);
         
-        // Update local state immediately for responsiveness
+        // Update local state immediately (optimistic update)
         player.score = newScore;
-        this.updateScoreDisplay(playerId, newScore);
+        this.updatePlayerTileScore(playerId, newScore);
+        
+        // Add to score history
+        this.gameState.scoreHistory.push({
+            playerId,
+            playerName: player.name,
+            oldScore,
+            newScore,
+            change: amount,
+            timestamp: Date.now()
+        });
 
         // Update Firebase if available
-        if (this.firebaseService && this.firebaseService.isAvailable() && this.gameState.sessionCode) {
+        if (this.firebaseService && this.firebaseService.isAvailable()) {
             try {
                 await this.firebaseService.updatePlayerScore(this.gameState.sessionCode, playerId, newScore);
             } catch (error) {
                 console.error('Failed to update score in Firebase:', error);
-                // Revert local change if Firebase update fails
-                player.score = player.score - (delta * increment);
-                this.updateScoreDisplay(playerId, player.score);
+                // Revert optimistic update on failure
+                player.score = oldScore;
+                this.updatePlayerTileScore(playerId, oldScore);
             }
         }
 
-        // Check for target score
-        if (this.gameState.targetScore && newScore >= this.gameState.targetScore) {
-            this.handleTargetReached(player);
-        }
+        // Check for target score achievement
+        this.checkTargetScore(player);
     }
 
-    updateScoreDisplay(playerId, score) {
-        const tile = document.querySelector(`[data-player-id="${playerId}"]`);
-        if (tile) {
-            const scoreDisplay = tile.querySelector('.score-display');
-            scoreDisplay.textContent = this.formatScore(score);
-        }
-    }
-
-    formatScore(score) {
-        return this.gameState.allowDecimals ? score.toFixed(1) : Math.round(score).toString();
-    }
-
+    // Update Player Name
     async updatePlayerName(playerId, newName) {
-        const player = this.gameState.players.find(p => p.id === playerId);
-        if (!player || !newName.trim()) return;
+        const player = this.getPlayer(playerId);
+        if (!player) return;
 
-        const trimmedName = newName.trim();
-        
-        // Update local state immediately
-        player.name = trimmedName;
+        const oldName = player.name;
+        player.name = newName;
 
-        // Update Firebase if available
-        if (this.firebaseService && this.firebaseService.isAvailable() && this.gameState.sessionCode) {
+        if (this.firebaseService && this.firebaseService.isAvailable()) {
             try {
-                await this.firebaseService.updatePlayerName(this.gameState.sessionCode, playerId, trimmedName);
+                await this.firebaseService.updatePlayerName(this.gameState.sessionCode, playerId, newName);
             } catch (error) {
-                console.error('Failed to update player name in Firebase:', error);
+                console.error('Failed to update name in Firebase:', error);
+                player.name = oldName; // Revert on failure
             }
         }
     }
 
-    // Game Controls
-    async resetAllScores() {
-        if (!confirm('Are you sure you want to reset all scores to the starting value?')) {
+    // Get Player by ID
+    getPlayer(playerId) {
+        return this.gameState.players.find(p => p.id === playerId);
+    }
+
+    // Update Player Tile Score Display
+    updatePlayerTileScore(playerId, newScore) {
+        const tile = document.querySelector(`[data-player-id="${playerId}"]`);
+        const scoreElement = tile?.querySelector('.score-value');
+        if (scoreElement) {
+            scoreElement.textContent = newScore;
+            
+            // Add animation
+            scoreElement.classList.add('score-updated');
+            setTimeout(() => {
+                scoreElement.classList.remove('score-updated');
+            }, 300);
+        }
+    }
+
+    // Check Target Score Achievement
+    checkTargetScore(player) {
+        if (this.gameState.targetScore && player.score >= this.gameState.targetScore) {
+            this.showMessage(`🎉 ${player.name} reached the target score of ${this.gameState.targetScore}!`, 'success');
+            
+            if (!this.gameState.playAfterTarget) {
+                setTimeout(() => {
+                    this.showMessage(`Game Over! ${player.name} wins!`, 'success');
+                }, 2000);
+            }
+        }
+    }
+
+    // Update Game State from Firebase
+    updateGameStateFromFirebase(sessionData) {
+        if (sessionData.players) {
+            // Update player scores and names
+            Object.keys(sessionData.players).forEach(playerId => {
+                const firebasePlayer = sessionData.players[playerId];
+                const localPlayer = this.getPlayer(playerId);
+                
+                if (localPlayer) {
+                    if (localPlayer.score !== firebasePlayer.score) {
+                        localPlayer.score = firebasePlayer.score;
+                        this.updatePlayerTileScore(playerId, firebasePlayer.score);
+                    }
+                    
+                    if (localPlayer.name !== firebasePlayer.name) {
+                        localPlayer.name = firebasePlayer.name;
+                        const nameElement = document.querySelector(`[data-player-id="${playerId}"] .player-name`);
+                        if (nameElement) {
+                            nameElement.textContent = firebasePlayer.name;
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    // Session Management
+    async handleJoinSession(event) {
+        event.preventDefault();
+        
+        const sessionCode = document.getElementById('joinCode').value.toUpperCase();
+        const playerName = document.getElementById('playerName').value;
+
+        if (!sessionCode || !playerName) {
+            this.showMessage('Please enter both session code and your name.', 'error');
             return;
         }
 
-        // Update local state
-        this.gameState.players.forEach(player => {
-            player.score = this.gameState.startingScore;
-            this.updateScoreDisplay(player.id, player.score);
-        });
-
-        // Update Firebase if available
-        if (this.firebaseService && this.firebaseService.isAvailable() && this.gameState.sessionCode) {
-            try {
-                const updates = {
-                    players: this.gameState.players
+        try {
+            if (this.firebaseService && this.firebaseService.isAvailable()) {
+                const sessionData = await this.firebaseService.joinSession(sessionCode);
+                
+                this.gameState = {
+                    ...this.gameState,
+                    sessionCode,
+                    currentPlayerName: playerName,
+                    isScorekeeper: false,
+                    ...sessionData
                 };
-                await this.firebaseService.updateSession(this.gameState.sessionCode, updates);
-            } catch (error) {
-                console.error('Failed to reset scores in Firebase:', error);
+
+                this.showPlayerView();
+            } else {
+                this.showMessage('Cannot join session. Firebase is not available.', 'error');
             }
+        } catch (error) {
+            console.error('Error joining session:', error);
+            this.showMessage('Failed to join session. Please check the code and try again.', 'error');
         }
     }
 
-    newRound() {
-        if (confirm('Start a new round? This will keep current scores.')) {
-            console.log('New round started');
-            // Could add round-specific logic here
-        }
-    }
-
-    async endSession() {
-        if (!confirm('Are you sure you want to end this session?')) {
-            return;
-        }
-
-        // End Firebase session if available
-        if (this.firebaseService && this.firebaseService.isAvailable() && this.gameState.sessionCode) {
-            try {
-                await this.firebaseService.endSession(this.gameState.sessionCode);
-            } catch (error) {
-                console.error('Failed to end session in Firebase:', error);
-            }
-        }
-
-        // Clean up listeners
-        this.cleanup();
-
-        // Reset game state
-        this.resetGameState();
-        this.showPage('landingPage');
-    }
-
-    leaveSession() {
-        if (confirm('Are you sure you want to leave this session?')) {
-            this.cleanup();
-            this.resetGameState();
-            this.showPage('landingPage');
-        }
-    }
-
-    // Reset game state
-    resetGameState() {
-        this.gameState = {
-            sessionCode: '',
-            sessionName: '',
-            players: [],
-            numPlayers: 2,
-            startingScore: 0,
-            allowDecimals: false,
-            targetScore: null,
-            playAfterTarget: false,
-            isScorekeeper: false,
-            currentPlayerName: '',
-            isOnline: this.gameState.isOnline
-        };
-    }
-
-    // Cleanup Firebase listeners
-    cleanup() {
-        if (this.firebaseService) {
-            this.firebaseService.cleanup();
-        }
-        this.sessionListener = null;
-    }
-
-    // Target Score Handling
-    handleTargetReached(player) {
-        if (!this.gameState.playAfterTarget) {
-            alert(`🎉 ${player.name} has reached the target score of ${this.gameState.targetScore}!`);
-        }
-    }
-
-    // Player Name Editing
-    async editPlayerName() {
-        const newName = prompt('Enter your new name:', this.gameState.currentPlayerName);
-        if (!newName || !newName.trim()) return;
-
-        this.gameState.currentPlayerName = newName.trim();
-        document.getElementById('currentPlayerName').textContent = this.gameState.currentPlayerName;
-    }
-
-    // QR Code Modal
-    showQRModal() {
-        const modal = document.getElementById('qrModal');
-        const container = document.getElementById('qrCodeContainer');
-        
-        // Generate QR code placeholder (will be enhanced with actual QR generation)
-        container.innerHTML = `
-            <div style="width: 200px; height: 200px; background: #f0f0f0; border: 2px dashed #ccc; 
-                        display: flex; align-items: center; justify-content: center; margin: 0 auto;">
-                <div style="text-align: center; color: #666;">
-                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">📱</div>
-                    <div>QR Code</div>
-                    <div style="font-family: monospace; font-weight: bold; margin-top: 0.5rem;">
-                        ${this.gameState.sessionCode}
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        modal.classList.add('active');
-    }
-
-    hideQRModal() {
-        document.getElementById('qrModal').classList.remove('active');
-    }
-
-    // QR Code Scanning (placeholder)
-    scanQRCode() {
-        alert('QR code scanning will be implemented in the next phase with camera access.');
+    // Show Player View (Read-only)
+    showPlayerView() {
+        // Implementation for player view would go here
+        this.showMessage('Player view not yet implemented in this version.', 'info');
     }
 
     // Utility Functions
     generateSessionCode() {
-        // Generate a 6-character alphanumeric code
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
         let result = '';
         for (let i = 0; i < 6; i++) {
@@ -703,21 +530,170 @@ class RummyScorekeeper {
         return result;
     }
 
-    validateSessionCode(code) {
-        // Basic validation - 6 characters, alphanumeric
-        return code.length === 6 && /^[A-Z0-9]+$/.test(code);
+    // QR Code Display
+    showQRCode() {
+        const qrUrl = `${window.location.origin}${window.location.pathname}?join=${this.gameState.sessionCode}`;
+        
+        // Create modal
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Share Session</h3>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p>Session Code: <strong>${this.gameState.sessionCode}</strong></p>
+                    <p>Share this URL:</p>
+                    <input type="text" value="${qrUrl}" readonly class="share-url">
+                    <div class="qr-placeholder">
+                        <p>📱 QR Code would appear here</p>
+                        <p><small>Players can manually enter the session code: <strong>${this.gameState.sessionCode}</strong></small></p>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        // Close modal events
+        modal.querySelector('.modal-close').addEventListener('click', () => {
+            document.body.removeChild(modal);
+        });
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                document.body.removeChild(modal);
+            }
+        });
+    }
+
+    // Game Controls
+    async resetAllScores() {
+        if (!confirm('Are you sure you want to reset all scores to the starting score?')) return;
+
+        const startingScore = this.gameState.startingScore;
+        
+        this.gameState.players.forEach(player => {
+            player.score = startingScore;
+            this.updatePlayerTileScore(player.id, startingScore);
+        });
+
+        if (this.firebaseService && this.firebaseService.isAvailable()) {
+            try {
+                const updates = {};
+                this.gameState.players.forEach(player => {
+                    updates[`players/${player.id}/score`] = startingScore;
+                });
+                await this.firebaseService.updateSession(this.gameState.sessionCode, updates);
+            } catch (error) {
+                console.error('Failed to reset scores in Firebase:', error);
+            }
+        }
+
+        this.showMessage('All scores have been reset!', 'success');
+    }
+
+    startNewRound() {
+        this.showMessage('New round started!', 'info');
+    }
+
+    async endSession() {
+        if (!confirm('Are you sure you want to end this session?')) return;
+
+        if (this.firebaseService && this.firebaseService.isAvailable()) {
+            try {
+                await this.firebaseService.endSession(this.gameState.sessionCode);
+            } catch (error) {
+                console.error('Failed to end session in Firebase:', error);
+            }
+        }
+
+        this.showPage('landingPage');
+        this.showMessage('Session ended successfully!', 'success');
+    }
+
+    // Export Game Data
+    exportGameData() {
+        if (!this.gameState.sessionCode) {
+            this.showMessage('No active session to export.', 'warning');
+            return;
+        }
+
+        const exportData = {
+            sessionInfo: {
+                code: this.gameState.sessionCode,
+                name: this.gameState.sessionName,
+                startTime: new Date().toISOString(),
+                playerCount: this.gameState.numPlayers
+            },
+            players: this.gameState.players,
+            scoreHistory: this.gameState.scoreHistory,
+            settings: {
+                startingScore: this.gameState.startingScore,
+                targetScore: this.gameState.targetScore,
+                allowDecimals: this.gameState.allowDecimals
+            }
+        };
+
+        // Create and download JSON file
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `gamescore-${this.gameState.sessionCode}-${Date.now()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        this.showMessage('Game data exported successfully!', 'success');
+    }
+
+    // Message System
+    showMessage(text, type = 'info') {
+        const message = document.createElement('div');
+        message.className = `message message-${type}`;
+        message.innerHTML = `
+            <span>${text}</span>
+            <button class="message-close">&times;</button>
+        `;
+
+        document.body.appendChild(message);
+
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (document.body.contains(message)) {
+                document.body.removeChild(message);
+            }
+        }, 5000);
+
+        // Manual close
+        message.querySelector('.message-close').addEventListener('click', () => {
+            if (document.body.contains(message)) {
+                document.body.removeChild(message);
+            }
+        });
+    }
+
+    // Cleanup
+    cleanup() {
+        if (this.firebaseService) {
+            this.firebaseService.cleanup();
+        }
     }
 }
 
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    window.app = new RummyScorekeeper();
+    window.app = new GameScorePro();
 });
 
-// Utility function for global access
-function updatePlayerName(playerId, newName) {
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
     if (window.app) {
-        window.app.updatePlayerName(playerId, newName);
+        window.app.cleanup();
     }
-}
+});
 
