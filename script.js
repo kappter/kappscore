@@ -197,12 +197,16 @@ function handleCreateSession(e) {
     const playerCount = parseInt(document.getElementById('numPlayers').value);
     const startingScore = parseFloat(document.getElementById('startingScore').value) || 0;
     const allowDecimals = document.getElementById('allowDecimals').checked;
+    const targetScore = parseFloat(document.getElementById('targetScore').value) || null;
+    const playAfterTarget = document.getElementById('playAfterTarget').checked;
     
     const sessionData = {
         name: sessionName,
         playerCount: playerCount,
         startingScore: startingScore,
-        allowDecimals: allowDecimals
+        allowDecimals: allowDecimals,
+        targetScore: targetScore,
+        continueAfterTarget: playAfterTarget
     };
     
     console.log('Session data:', sessionData);
