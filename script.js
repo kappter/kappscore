@@ -105,34 +105,13 @@ function showPage(pageId) {
         page.classList.remove('active');
     });
     
-    // Show target page - use the exact IDs from HTML
-    let targetPageId;
-    switch(pageId) {
-        case 'landing':
-            targetPageId = 'landingPage';
-            break;
-        case 'createSession':
-            targetPageId = 'createSessionPage';
-            break;
-        case 'joinSession':
-            targetPageId = 'joinSessionPage';
-            break;
-        case 'scorekeeper':
-            targetPageId = 'scorekeeperPage';
-            break;
-        case 'playerView':
-            targetPageId = 'playerViewPage';
-            break;
-        default:
-            targetPageId = pageId;
-    }
-    
-    const targetPage = document.getElementById(targetPageId);
+    // Show target page - use the exact IDs that actually exist
+    const targetPage = document.getElementById(pageId);
     if (targetPage) {
         targetPage.classList.add('active');
         console.log('Page shown successfully:', pageId);
     } else {
-        console.error('Page not found:', targetPageId);
+        console.error('Page not found:', pageId);
         // List all available pages for debugging
         const allPages = document.querySelectorAll('.page');
         console.log('Available pages:', Array.from(allPages).map(p => p.id));
