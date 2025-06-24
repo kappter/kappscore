@@ -1,4 +1,4 @@
-// GameScore Pro - Final Firebase Connection Fix
+// GameScore Pro - Complete with Enhanced Export and Summary Features
 console.log('GameScore Pro initialized');
 
 // Global app state
@@ -286,7 +286,7 @@ function createSession(sessionData) {
             name: `Player ${i}`,
             score: sessionData.startingScore,
             joinedAt: new Date().toISOString(),
-            isActive: true
+            isActive: false // Start as inactive until someone joins
         });
     }
     
@@ -367,9 +367,14 @@ function joinSession(sessionCode, playerName) {
             currentSession = sessionData;
             isScorekeeper = false;
             
-            // Find or assign player
+            // Find or assign player - FIXED VERSION
             currentPlayer = findOrAssignPlayer(playerName);
             console.log('Assigned player:', currentPlayer);
+            
+            if (!currentPlayer) {
+                showMessage('Session is full. Please try again later.', 'error');
+                return;
+            }
             
             showMessage('Joined session successfully!', 'success');
             
@@ -492,25 +497,59 @@ function setupRealtimeListeners(sessionCode) {
     });
 }
 
-// Player Management
+// Player Management - FIXED VERSION
 function findOrAssignPlayer(playerName) {
     console.log('Finding or assigning player:', playerName);
+    console.log('Available players:', players);
     
-    // Try to find existing player with same name
-    let player = players.find(p => p.name === playerName);
-    
-    if (!player) {
-        // Find first available slot
-        player = players.find(p => p.name.startsWith('Player ') && !p.isActive);
-        if (player) {
-            player.name = playerName;
-            player.isActive = true;
-            player.joinedAt = new Date().toISOString();
-        }
+    if (!players || players.length === 0) {
+        console.error('No players available in session');
+        return null;
     }
     
-    console.log('Player found/assigned:', player);
-    return player;
+    // Try to find existing player with same name
+    let player = players.find(p => p.name === playerName && p.isActive);
+    
+    if (player) {
+        console.log('Found existing active player:', player);
+        return player;
+    }
+    
+    // Try to find player with same name but inactive
+    player = players.find(p => p.name === playerName);
+    if (player) {
+        player.isActive = true;
+        player.joinedAt = new Date().toISOString();
+        console.log('Reactivated existing player:', player);
+        return player;
+    }
+    
+    // Find first available slot (inactive player)
+    player = players.find(p => !p.isActive);
+    if (player) {
+        player.name = playerName;
+        player.isActive = true;
+        player.joinedAt = new Date().toISOString();
+        console.log('Assigned to available slot:', player);
+        
+        // Update in Firebase
+        if (firebaseReady && currentSession) {
+            const database = getFirebaseDatabase();
+            if (database) {
+                const playerRef = database.ref(`sessions/${currentSession.code}/players/${player.id}`);
+                playerRef.update({
+                    name: playerName,
+                    isActive: true,
+                    joinedAt: player.joinedAt
+                });
+            }
+        }
+        
+        return player;
+    }
+    
+    console.log('No available player slots found');
+    return null;
 }
 
 function generatePlayerTiles() {
@@ -534,7 +573,7 @@ function generatePlayerTiles() {
 }
 
 function createPlayerTile(player, index, isEditable) {
-    console.log('Creating tile for player:', player.name);
+    console.log('Creating tile for player:', player.name, 'Score:', player.score);
     
     const tile = document.createElement('div');
     tile.className = 'player-tile';
@@ -551,7 +590,7 @@ function createPlayerTile(player, index, isEditable) {
         </div>
         
         <div class="player-score">
-            <div class="score-value">${player.score}</div>
+            <div class="score-value">${player.score || 0}</div>
         </div>
         
         ${isEditable ? `
@@ -570,7 +609,11 @@ function createPlayerTile(player, index, isEditable) {
                 <button class="score-btn decrease-btn" onclick="updateScore('${player.id}', 'decrease')">−</button>
                 <button class="score-btn increase-btn" onclick="updateScore('${player.id}', 'increase')">+</button>
             </div>
-        ` : ''}
+        ` : `
+            <div class="player-view-controls">
+                <button class="refresh-btn" onclick="refreshScores()">🔄 Refresh</button>
+            </div>
+        `}
     `;
     
     // Add event listeners for editable elements
@@ -595,6 +638,48 @@ function createPlayerTile(player, index, isEditable) {
     }
     
     return tile;
+}
+
+// Missing Functions - ADDED
+function refreshScores() {
+    console.log('Refreshing scores...');
+    if (currentSession && !isScorekeeper) {
+        loadSessionFromFirebase(currentSession.code)
+            .then((sessionData) => {
+                currentSession = sessionData;
+                players = sessionData.players;
+                updatePlayerView();
+                showMessage('Scores refreshed!', 'success');
+            })
+            .catch(error => {
+                console.error('Error refreshing scores:', error);
+                showMessage('Could not refresh scores', 'error');
+            });
+    }
+}
+
+function leaveSession() {
+    console.log('Leaving session...');
+    
+    // Mark current player as inactive
+    if (currentPlayer && firebaseReady && currentSession) {
+        const database = getFirebaseDatabase();
+        if (database) {
+            const playerRef = database.ref(`sessions/${currentSession.code}/players/${currentPlayer.id}/isActive`);
+            playerRef.set(false);
+        }
+    }
+    
+    // Clean up
+    currentSession = null;
+    currentPlayer = null;
+    isScorekeeper = false;
+    players = [];
+    scoreHistory = [];
+    
+    // Return to landing page
+    showPage('landing');
+    showMessage('Left session', 'info');
 }
 
 // Score Management
@@ -623,7 +708,7 @@ function updateScoreByAmount(playerId, delta) {
         return;
     }
     
-    const oldScore = player.score;
+    const oldScore = player.score || 0;
     const newScore = oldScore + delta;
     
     console.log('Score change:', oldScore, '->', newScore);
@@ -755,6 +840,590 @@ function updatePlayerView() {
     }
     
     console.log('Player view updated successfully');
+}
+
+// Enhanced Export and Summary Functions
+function exportGameData() {
+    if (!currentSession) {
+        showMessage('No active session to export', 'error');
+        return;
+    }
+    
+    // Create both JSON and HTML exports
+    exportJSONData();
+    exportHTMLSummary();
+}
+
+function exportJSONData() {
+    const exportData = {
+        session: currentSession,
+        players: players,
+        scoreHistory: scoreHistory,
+        exportedAt: new Date().toISOString()
+    };
+    
+    const dataStr = JSON.stringify(exportData, null, 2);
+    const dataBlob = new Blob([dataStr], {type: 'application/json'});
+    
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(dataBlob);
+    link.download = `GameScore_${currentSession.code}_${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+}
+
+function exportHTMLSummary() {
+    const htmlContent = generateHTMLSummary();
+    const htmlBlob = new Blob([htmlContent], {type: 'text/html'});
+    
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(htmlBlob);
+    link.download = `GameScore_Summary_${currentSession.code}_${new Date().toISOString().split('T')[0]}.html`;
+    link.click();
+    
+    showMessage('Game data and HTML summary exported successfully!', 'success');
+}
+
+function generateHTMLSummary() {
+    const sessionStart = new Date(currentSession.createdAt);
+    const sessionEnd = new Date();
+    const duration = Math.round((sessionEnd - sessionStart) / 1000 / 60); // minutes
+    
+    // Calculate statistics
+    const stats = calculateGameStatistics();
+    
+    // Generate score progression data
+    const progressionData = generateScoreProgressionData();
+    
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GameScore Pro - ${currentSession.name} Summary</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 700;
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+            font-size: 1.2em;
+        }
+        .content {
+            padding: 40px;
+        }
+        .section {
+            margin-bottom: 40px;
+        }
+        .section h2 {
+            color: #1e3a8a;
+            border-bottom: 3px solid #3b82f6;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            border: 2px solid #e2e8f0;
+        }
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #1e3a8a;
+            margin-bottom: 5px;
+        }
+        .stat-label {
+            color: #64748b;
+            font-size: 0.9em;
+        }
+        .players-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .player-card {
+            background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
+            border: 2px solid #e2e8f0;
+            border-radius: 15px;
+            padding: 20px;
+            position: relative;
+        }
+        .player-card.winner {
+            border-color: #fbbf24;
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        }
+        .player-card.winner::before {
+            content: "🏆";
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            font-size: 2em;
+            background: #fbbf24;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .player-name {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #1e3a8a;
+            margin-bottom: 10px;
+        }
+        .player-score {
+            font-size: 2em;
+            font-weight: bold;
+            color: #059669;
+            margin-bottom: 15px;
+        }
+        .player-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            font-size: 0.9em;
+            color: #64748b;
+        }
+        .chart-container {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .timeline {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .timeline-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .timeline-item:last-child {
+            border-bottom: none;
+        }
+        .timeline-time {
+            font-size: 0.8em;
+            color: #64748b;
+            width: 80px;
+            flex-shrink: 0;
+        }
+        .timeline-content {
+            flex: 1;
+            margin-left: 15px;
+        }
+        .footer {
+            background: #f8fafc;
+            padding: 20px;
+            text-align: center;
+            color: #64748b;
+            border-top: 1px solid #e2e8f0;
+        }
+        @media print {
+            body { background: white; }
+            .container { box-shadow: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>${currentSession.name}</h1>
+            <p>Session ${currentSession.code} • ${sessionStart.toLocaleDateString()} • ${duration} minutes</p>
+        </div>
+        
+        <div class="content">
+            <div class="section">
+                <h2>📊 Game Statistics</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value">${players.length}</div>
+                        <div class="stat-label">Players</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${duration}</div>
+                        <div class="stat-label">Minutes Played</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${scoreHistory.length}</div>
+                        <div class="stat-label">Score Changes</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${stats.winner ? stats.winner.score : 'N/A'}</div>
+                        <div class="stat-label">Highest Score</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h2>🏆 Final Standings</h2>
+                <div class="players-grid">
+                    ${players.sort((a, b) => (b.score || 0) - (a.score || 0)).map((player, index) => `
+                        <div class="player-card ${index === 0 ? 'winner' : ''}">
+                            <div class="player-name">${player.name}</div>
+                            <div class="player-score">${player.score || 0}</div>
+                            <div class="player-stats">
+                                <div>Rank: #${index + 1}</div>
+                                <div>Changes: ${scoreHistory.filter(h => h.playerId === player.id).length}</div>
+                                <div>Joined: ${new Date(player.joinedAt).toLocaleTimeString()}</div>
+                                <div>Status: ${player.isActive ? 'Active' : 'Inactive'}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            
+            <div class="section">
+                <h2>📈 Score Progression</h2>
+                <div class="chart-container">
+                    <canvas id="scoreChart" width="400" height="200"></canvas>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h2>⏰ Game Timeline</h2>
+                <div class="timeline">
+                    ${scoreHistory.slice(-20).reverse().map(entry => `
+                        <div class="timeline-item">
+                            <div class="timeline-time">${new Date(entry.timestamp).toLocaleTimeString()}</div>
+                            <div class="timeline-content">
+                                <strong>${entry.playerName}</strong> ${entry.delta > 0 ? 'gained' : 'lost'} 
+                                ${Math.abs(entry.delta)} points (${entry.oldScore} → ${entry.newScore})
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Generated by GameScore Pro • ${new Date().toLocaleString()}</p>
+        </div>
+    </div>
+    
+    <script>
+        // Create score progression chart
+        const ctx = document.getElementById('scoreChart').getContext('2d');
+        const chartData = ${JSON.stringify(progressionData)};
+        
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: chartData.labels,
+                datasets: chartData.datasets
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Score Progression Over Time'
+                    },
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Score'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Time'
+                        }
+                    }
+                },
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                }
+            }
+        });
+    </script>
+</body>
+</html>`;
+}
+
+function calculateGameStatistics() {
+    const winner = players.reduce((prev, current) => 
+        (prev.score || 0) > (current.score || 0) ? prev : current
+    );
+    
+    return {
+        winner,
+        totalChanges: scoreHistory.length,
+        averageScore: players.reduce((sum, p) => sum + (p.score || 0), 0) / players.length,
+        gameLength: Math.round((new Date() - new Date(currentSession.createdAt)) / 1000 / 60)
+    };
+}
+
+function generateScoreProgressionData() {
+    const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4'];
+    
+    // Create timeline of all score changes
+    const timeline = [...scoreHistory].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    
+    // Initialize player scores
+    const playerScores = {};
+    players.forEach(player => {
+        playerScores[player.id] = currentSession.startingScore || 0;
+    });
+    
+    const labels = ['Start'];
+    const datasets = players.map((player, index) => ({
+        label: player.name,
+        data: [currentSession.startingScore || 0],
+        borderColor: colors[index % colors.length],
+        backgroundColor: colors[index % colors.length] + '20',
+        tension: 0.1
+    }));
+    
+    // Process each score change
+    timeline.forEach((change, index) => {
+        labels.push(new Date(change.timestamp).toLocaleTimeString());
+        
+        // Update the score for the player who changed
+        playerScores[change.playerId] = change.newScore;
+        
+        // Add current scores for all players
+        datasets.forEach(dataset => {
+            const player = players.find(p => p.name === dataset.label);
+            dataset.data.push(playerScores[player.id]);
+        });
+    });
+    
+    return { labels, datasets };
+}
+
+function showGameSummary() {
+    if (!currentSession) {
+        showMessage('No active session to summarize', 'error');
+        return;
+    }
+    
+    // Create and show summary modal
+    const modal = createSummaryModal();
+    document.body.appendChild(modal);
+    
+    // Initialize chart after modal is shown
+    setTimeout(() => {
+        initializeSummaryChart();
+    }, 100);
+}
+
+function createSummaryModal() {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+        <div class="modal-content summary-modal">
+            <div class="modal-header">
+                <h2>📊 Game Summary</h2>
+                <button class="modal-close" onclick="closeSummaryModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="summary-tabs">
+                    <button class="tab-btn active" onclick="showSummaryTab('overview')">Overview</button>
+                    <button class="tab-btn" onclick="showSummaryTab('chart')">Chart</button>
+                    <button class="tab-btn" onclick="showSummaryTab('timeline')">Timeline</button>
+                </div>
+                
+                <div id="overview-tab" class="tab-content active">
+                    <div class="summary-stats">
+                        ${generateSummaryStats()}
+                    </div>
+                    <div class="summary-players">
+                        ${generateSummaryPlayers()}
+                    </div>
+                </div>
+                
+                <div id="chart-tab" class="tab-content">
+                    <canvas id="summaryChart" width="400" height="200"></canvas>
+                </div>
+                
+                <div id="timeline-tab" class="tab-content">
+                    <div class="summary-timeline">
+                        ${generateSummaryTimeline()}
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="exportHTMLSummary()" class="btn btn-primary">📄 Export HTML</button>
+                <button onclick="exportJSONData()" class="btn btn-secondary">📊 Export JSON</button>
+                <button onclick="closeSummaryModal()" class="btn btn-secondary">Close</button>
+            </div>
+        </div>
+    `;
+    
+    return modal;
+}
+
+function generateSummaryStats() {
+    const stats = calculateGameStatistics();
+    const duration = Math.round((new Date() - new Date(currentSession.createdAt)) / 1000 / 60);
+    
+    return `
+        <div class="stats-grid">
+            <div class="stat-item">
+                <div class="stat-value">${players.length}</div>
+                <div class="stat-label">Players</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">${duration}m</div>
+                <div class="stat-label">Duration</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">${scoreHistory.length}</div>
+                <div class="stat-label">Score Changes</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">${stats.winner.score || 0}</div>
+                <div class="stat-label">Highest Score</div>
+            </div>
+        </div>
+    `;
+}
+
+function generateSummaryPlayers() {
+    const sortedPlayers = [...players].sort((a, b) => (b.score || 0) - (a.score || 0));
+    
+    return `
+        <h3>🏆 Current Standings</h3>
+        <div class="players-list">
+            ${sortedPlayers.map((player, index) => `
+                <div class="player-summary ${index === 0 ? 'winner' : ''}">
+                    <div class="player-rank">#${index + 1}</div>
+                    <div class="player-info">
+                        <div class="player-name">${player.name} ${index === 0 ? '🏆' : ''}</div>
+                        <div class="player-details">
+                            Score: ${player.score || 0} • 
+                            Changes: ${scoreHistory.filter(h => h.playerId === player.id).length} • 
+                            ${player.isActive ? 'Active' : 'Inactive'}
+                        </div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+function generateSummaryTimeline() {
+    const recentHistory = scoreHistory.slice(-10).reverse();
+    
+    return `
+        <h3>⏰ Recent Activity</h3>
+        <div class="timeline-list">
+            ${recentHistory.map(entry => `
+                <div class="timeline-entry">
+                    <div class="timeline-time">${new Date(entry.timestamp).toLocaleTimeString()}</div>
+                    <div class="timeline-event">
+                        <strong>${entry.playerName}</strong> ${entry.delta > 0 ? 'gained' : 'lost'} 
+                        ${Math.abs(entry.delta)} points (${entry.oldScore} → ${entry.newScore})
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+function initializeSummaryChart() {
+    const canvas = document.getElementById('summaryChart');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    const progressionData = generateScoreProgressionData();
+    
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: progressionData.labels,
+            datasets: progressionData.datasets
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Score Progression'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+function showSummaryTab(tabName) {
+    // Hide all tabs
+    document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Show selected tab
+    document.getElementById(`${tabName}-tab`).classList.add('active');
+    event.target.classList.add('active');
+    
+    // Initialize chart if chart tab is selected
+    if (tabName === 'chart') {
+        setTimeout(() => initializeSummaryChart(), 100);
+    }
+}
+
+function closeSummaryModal() {
+    const modal = document.querySelector('.modal-overlay');
+    if (modal) {
+        modal.remove();
+    }
 }
 
 // Utility Functions
@@ -901,35 +1570,6 @@ function endSession() {
     // Return to landing page
     showPage('landing');
     showMessage('Session ended', 'info');
-}
-
-// Export and Summary Functions
-function exportGameData() {
-    if (!currentSession) {
-        showMessage('No active session to export', 'error');
-        return;
-    }
-    
-    const exportData = {
-        session: currentSession,
-        players: players,
-        scoreHistory: scoreHistory,
-        exportedAt: new Date().toISOString()
-    };
-    
-    const dataStr = JSON.stringify(exportData, null, 2);
-    const dataBlob = new Blob([dataStr], {type: 'application/json'});
-    
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(dataBlob);
-    link.download = `GameScore_${currentSession.code}_${new Date().toISOString().split('T')[0]}.json`;
-    link.click();
-    
-    showMessage('Game data exported successfully!', 'success');
-}
-
-function showGameSummary() {
-    showMessage('Game summary feature coming soon!', 'info');
 }
 
 function showQRCode() {
