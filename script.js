@@ -270,14 +270,50 @@ function createSession(sessionData) {
     
     console.log('Current session created:', currentSession);
     
-    // Update session info display
-    updateSessionInfo();
+    // Show success message with session code on the create session page
+    showMessage(`Session created! Code: ${sessionCode}`, 'success');
     
-    // Generate player tiles
-    generatePlayerTiles();
-    
-    // Show scorekeeper page
-    showPage('scorekeeper');
+    // Update the form to show session created state
+    const form = document.getElementById('createSessionForm');
+    if (form) {
+        form.innerHTML = `
+            <div class="session-created">
+                <h2>🎉 Session Created Successfully!</h2>
+                <div class="session-code-display">
+                    <label>Session Code:</label>
+                    <div class="code-value">${sessionCode}</div>
+                    <p>Share this code with other players so they can join</p>
+                </div>
+                <div class="session-details">
+                    <p><strong>Session Name:</strong> ${sessionData.name}</p>
+                    <p><strong>Players:</strong> ${sessionData.playerCount}</p>
+                    <p><strong>Starting Score:</strong> ${sessionData.startingScore}</p>
+                </div>
+                <div class="session-actions">
+                    <button id="startScoring" class="primary-btn">🎮 Start Scoring</button>
+                    <button id="backToLandingFromSession" class="secondary-btn">← Back to Home</button>
+                </div>
+            </div>
+        `;
+        
+        // Add event listeners for the new buttons
+        const startScoringBtn = document.getElementById('startScoring');
+        const backBtn = document.getElementById('backToLandingFromSession');
+        
+        if (startScoringBtn) {
+            startScoringBtn.addEventListener('click', () => {
+                // Generate player tiles and show scorekeeper interface
+                generatePlayerTiles();
+                showPage('scorekeeper');
+            });
+        }
+        
+        if (backBtn) {
+            backBtn.addEventListener('click', () => {
+                showPage('landing');
+            });
+        }
+    }
     
     // Save to Firebase if available
     if (firebaseReady) {
@@ -285,7 +321,7 @@ function createSession(sessionData) {
         saveSessionToFirebase(currentSession)
             .then(() => {
                 console.log('Session saved to Firebase successfully');
-                showMessage('Session created and saved online!', 'success');
+                showMessage('Session saved online!', 'success');
             })
             .catch((error) => {
                 console.error('Failed to save session to Firebase:', error);
