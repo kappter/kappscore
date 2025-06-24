@@ -1,4 +1,4 @@
-// GameScore Pro - Corrected Firebase Connection Logic
+// GameScore Pro - Final Firebase Connection Fix
 console.log('GameScore Pro initialized');
 
 // Global app state
@@ -26,22 +26,75 @@ function initializeApp() {
     // Show landing page
     showPage('landing');
     
-    // Wait for Firebase to be ready
-    waitForFirebase();
+    // Wait for Firebase to be ready with multiple attempts
+    waitForFirebaseWithRetry();
 }
 
-function waitForFirebase() {
-    console.log('Waiting for Firebase...');
+function waitForFirebaseWithRetry() {
+    console.log('Waiting for Firebase with retry logic...');
     
-    // Check if Firebase is available using the correct global variables
-    if (window.firebaseDatabase && window.isFirebaseEnabled !== undefined) {
-        console.log('Firebase found, setting up connection monitoring...');
+    let attempts = 0;
+    const maxAttempts = 10;
+    
+    function checkFirebase() {
+        attempts++;
+        console.log(`Firebase check attempt ${attempts}/${maxAttempts}`);
         
-        // Monitor Firebase connection status
-        const connectedRef = window.firebaseDatabase.ref('.info/connected');
+        // Check multiple ways Firebase might be available
+        const hasFirebaseApp = window.firebaseApp;
+        const hasFirebaseDatabase = window.firebaseDatabase;
+        const hasFirebaseGlobal = typeof firebase !== 'undefined';
+        const isEnabled = window.isFirebaseEnabled;
+        
+        console.log('Firebase availability check:', {
+            hasFirebaseApp,
+            hasFirebaseDatabase,
+            hasFirebaseGlobal,
+            isEnabled
+        });
+        
+        if (hasFirebaseDatabase || (hasFirebaseGlobal && firebase.database)) {
+            console.log('Firebase found! Setting up connection monitoring...');
+            setupFirebaseConnection();
+            return;
+        }
+        
+        if (attempts < maxAttempts) {
+            console.log('Firebase not ready yet, retrying in 1 second...');
+            setTimeout(checkFirebase, 1000);
+        } else {
+            console.log('Firebase not available after all attempts, running in offline mode');
+            firebaseReady = false;
+            updateConnectionStatus(false);
+        }
+    }
+    
+    // Start checking immediately and also after a short delay
+    checkFirebase();
+}
+
+function setupFirebaseConnection() {
+    try {
+        // Get database reference
+        let database = window.firebaseDatabase;
+        if (!database && typeof firebase !== 'undefined') {
+            database = firebase.database();
+        }
+        
+        if (!database) {
+            console.error('Could not get Firebase database reference');
+            firebaseReady = false;
+            updateConnectionStatus(false);
+            return;
+        }
+        
+        console.log('Setting up Firebase connection monitoring...');
+        
+        // Monitor connection status
+        const connectedRef = database.ref('.info/connected');
         connectedRef.on('value', (snapshot) => {
             const isOnline = snapshot.val() === true;
-            console.log('Firebase connection changed:', isOnline);
+            console.log('Firebase connection status changed:', isOnline);
             firebaseReady = isOnline;
             updateConnectionStatus(isOnline);
             
@@ -50,23 +103,18 @@ function waitForFirebase() {
             }
         });
         
-        // Also check the global flag
-        if (window.isFirebaseEnabled) {
-            firebaseReady = true;
-            updateConnectionStatus(true);
-        }
-    } else {
-        console.log('Firebase not available, running in offline mode');
+        // Also check if already connected
+        connectedRef.once('value', (snapshot) => {
+            const isOnline = snapshot.val() === true;
+            console.log('Initial Firebase connection status:', isOnline);
+            firebaseReady = isOnline;
+            updateConnectionStatus(isOnline);
+        });
+        
+    } catch (error) {
+        console.error('Error setting up Firebase connection:', error);
         firebaseReady = false;
         updateConnectionStatus(false);
-        
-        // Retry after a short delay in case Firebase is still loading
-        setTimeout(() => {
-            if (window.firebaseDatabase && !firebaseReady) {
-                console.log('Retrying Firebase connection...');
-                waitForFirebase();
-            }
-        }, 2000);
     }
 }
 
@@ -263,7 +311,8 @@ function createSession(sessionData) {
     showPage('scorekeeper');
     
     // Then try to save to Firebase
-    if (firebaseReady && window.firebaseDatabase) {
+    console.log('Firebase ready status for saving:', firebaseReady);
+    if (firebaseReady) {
         console.log('Saving session to Firebase...');
         saveSessionToFirebase(currentSession)
             .then(() => {
@@ -276,7 +325,7 @@ function createSession(sessionData) {
             });
     } else {
         console.log('Firebase not ready, session created locally');
-        showMessage('Session created locally (offline mode)', 'warning');
+        showMessage('Session created locally. Will sync when online.', 'warning');
     }
 }
 
@@ -302,48 +351,61 @@ function handleJoinSession(event) {
 function joinSession(sessionCode, playerName) {
     console.log('Attempting to join session:', sessionCode);
     console.log('Firebase ready status:', firebaseReady);
-    console.log('Firebase database available:', !!window.firebaseDatabase);
     
-    if (firebaseReady && window.firebaseDatabase) {
-        console.log('Joining via Firebase...');
-        loadSessionFromFirebase(sessionCode)
-            .then((sessionData) => {
-                console.log('Joined session successfully:', sessionData);
-                currentSession = sessionData;
-                isScorekeeper = false;
-                
-                // Find or assign player
-                currentPlayer = findOrAssignPlayer(playerName);
-                console.log('Assigned player:', currentPlayer);
-                
-                showMessage('Joined session successfully!', 'success');
-                
-                // Update UI and show player view
-                updatePlayerView();
-                showPage('playerView');
-                
-                // Set up real-time listeners
-                setupRealtimeListeners(sessionCode);
-            })
-            .catch(error => {
-                console.error('Error joining session:', error);
-                showMessage('Could not join session. Please check the code.', 'error');
-            });
-    } else {
-        console.log('Firebase not ready - Ready:', firebaseReady, 'Database:', !!window.firebaseDatabase);
-        showMessage('Cannot join session - Firebase not connected. Please wait and try again.', 'error');
+    if (!firebaseReady) {
+        showMessage('Firebase is connecting... Please wait a moment and try again.', 'warning');
+        
+        // Try to reconnect Firebase
+        waitForFirebaseWithRetry();
+        return;
     }
+    
+    console.log('Firebase is ready, attempting to join session...');
+    loadSessionFromFirebase(sessionCode)
+        .then((sessionData) => {
+            console.log('Joined session successfully:', sessionData);
+            currentSession = sessionData;
+            isScorekeeper = false;
+            
+            // Find or assign player
+            currentPlayer = findOrAssignPlayer(playerName);
+            console.log('Assigned player:', currentPlayer);
+            
+            showMessage('Joined session successfully!', 'success');
+            
+            // Update UI and show player view
+            updatePlayerView();
+            showPage('playerView');
+            
+            // Set up real-time listeners
+            setupRealtimeListeners(sessionCode);
+        })
+        .catch(error => {
+            console.error('Error joining session:', error);
+            showMessage('Could not find session. Please check the code and try again.', 'error');
+        });
 }
 
 // Firebase Operations
+function getFirebaseDatabase() {
+    if (window.firebaseDatabase) {
+        return window.firebaseDatabase;
+    }
+    if (typeof firebase !== 'undefined' && firebase.database) {
+        return firebase.database();
+    }
+    return null;
+}
+
 function saveSessionToFirebase(session) {
     return new Promise((resolve, reject) => {
-        if (!window.firebaseDatabase) {
+        const database = getFirebaseDatabase();
+        if (!database) {
             reject(new Error('Firebase database not available'));
             return;
         }
         
-        const sessionRef = window.firebaseDatabase.ref(`sessions/${session.code}`);
+        const sessionRef = database.ref(`sessions/${session.code}`);
         sessionRef.set({
             metadata: {
                 name: session.name,
@@ -367,12 +429,13 @@ function saveSessionToFirebase(session) {
 
 function loadSessionFromFirebase(sessionCode) {
     return new Promise((resolve, reject) => {
-        if (!window.firebaseDatabase) {
+        const database = getFirebaseDatabase();
+        if (!database) {
             reject(new Error('Firebase database not available'));
             return;
         }
         
-        const sessionRef = window.firebaseDatabase.ref(`sessions/${sessionCode}`);
+        const sessionRef = database.ref(`sessions/${sessionCode}`);
         sessionRef.once('value')
             .then((snapshot) => {
                 const data = snapshot.val();
@@ -398,12 +461,13 @@ function loadSessionFromFirebase(sessionCode) {
 }
 
 function setupRealtimeListeners(sessionCode) {
-    if (!window.firebaseDatabase) return;
+    const database = getFirebaseDatabase();
+    if (!database) return;
     
     console.log('Setting up real-time listeners for session:', sessionCode);
     
     // Listen for player updates
-    const playersRef = window.firebaseDatabase.ref(`sessions/${sessionCode}/players`);
+    const playersRef = database.ref(`sessions/${sessionCode}/players`);
     playersRef.on('value', (snapshot) => {
         const playersData = snapshot.val();
         if (playersData) {
@@ -418,7 +482,7 @@ function setupRealtimeListeners(sessionCode) {
     });
     
     // Listen for score history updates
-    const historyRef = window.firebaseDatabase.ref(`sessions/${sessionCode}/scoreHistory`);
+    const historyRef = database.ref(`sessions/${sessionCode}/scoreHistory`);
     historyRef.on('value', (snapshot) => {
         const historyData = snapshot.val();
         if (historyData) {
@@ -582,7 +646,7 @@ function updateScoreByAmount(playerId, delta) {
     updatePlayerScoreDisplay(playerId, newScore);
     
     // Save to Firebase
-    if (firebaseReady && window.firebaseDatabase && currentSession) {
+    if (firebaseReady && currentSession) {
         updatePlayerScoreInFirebase(currentSession.code, playerId, newScore);
     }
     
@@ -593,9 +657,10 @@ function updateScoreByAmount(playerId, delta) {
 }
 
 function updatePlayerScoreInFirebase(sessionCode, playerId, newScore) {
-    if (!window.firebaseDatabase) return;
+    const database = getFirebaseDatabase();
+    if (!database) return;
     
-    const playerRef = window.firebaseDatabase.ref(`sessions/${sessionCode}/players/${playerId}/score`);
+    const playerRef = database.ref(`sessions/${sessionCode}/players/${playerId}/score`);
     playerRef.set(newScore)
         .then(() => {
             console.log('Player score updated in Firebase');
@@ -628,9 +693,12 @@ function updatePlayerName(playerId, newName) {
     player.name = newName;
     
     // Update in Firebase if connected
-    if (firebaseReady && window.firebaseDatabase && currentSession) {
-        const playerRef = window.firebaseDatabase.ref(`sessions/${currentSession.code}/players/${playerId}/name`);
-        playerRef.set(newName);
+    if (firebaseReady && currentSession) {
+        const database = getFirebaseDatabase();
+        if (database) {
+            const playerRef = database.ref(`sessions/${currentSession.code}/players/${playerId}/name`);
+            playerRef.set(newName);
+        }
     }
 }
 
@@ -786,13 +854,16 @@ function resetAllScores() {
     scoreHistory = [];
     
     // Update Firebase
-    if (firebaseReady && window.firebaseDatabase && currentSession) {
-        const sessionRef = window.firebaseDatabase.ref(`sessions/${currentSession.code}`);
-        sessionRef.child('players').set(players.reduce((acc, player) => {
-            acc[player.id] = player;
-            return acc;
-        }, {}));
-        sessionRef.child('scoreHistory').set([]);
+    if (firebaseReady && currentSession) {
+        const database = getFirebaseDatabase();
+        if (database) {
+            const sessionRef = database.ref(`sessions/${currentSession.code}`);
+            sessionRef.child('players').set(players.reduce((acc, player) => {
+                acc[player.id] = player;
+                return acc;
+            }, {}));
+            sessionRef.child('scoreHistory').set([]);
+        }
     }
     
     showMessage('All scores have been reset', 'success');
@@ -815,8 +886,9 @@ function endSession() {
     if (!confirm('Are you sure you want to end this session?')) return;
     
     // Clean up Firebase listeners
-    if (window.firebaseDatabase && currentSession) {
-        window.firebaseDatabase.ref(`sessions/${currentSession.code}`).off();
+    const database = getFirebaseDatabase();
+    if (database && currentSession) {
+        database.ref(`sessions/${currentSession.code}`).off();
     }
     
     // Reset state
