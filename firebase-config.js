@@ -4,15 +4,14 @@
 // Firebase configuration object
 // Note: These are public configuration values that are safe to expose in client-side code
 const firebaseConfig = {
-    // Using a demo Firebase project for development
-    // In production, you would replace these with your own Firebase project credentials
-    apiKey: "AIzaSyDemoKeyForRummyScorekeeper123456789",
-    authDomain: "rummy-scorekeeper-demo.firebaseapp.com",
-    databaseURL: "https://rummy-scorekeeper-demo-default-rtdb.firebaseio.com/",
-    projectId: "rummy-scorekeeper-demo",
-    storageBucket: "rummy-scorekeeper-demo.appspot.com",
-    messagingSenderId: "123456789012",
-    appId: "1:123456789012:web:abcdef123456789012345"
+    apiKey: "AIzaSyD6-GCVT9CfSCcZzmN1hro1d0FVGpImTkk",
+    authDomain: "kappscore.firebaseapp.com",
+    databaseURL: "https://kappscore-default-rtdb.firebaseio.com/",
+    projectId: "kappscore",
+    storageBucket: "kappscore.firebasestorage.app",
+    messagingSenderId: "673189308032",
+    appId: "1:673189308032:web:B55b94d7d75dc2f0e96865",
+    measurementId: "G-7MREYWZRCX"
 };
 
 // Firebase Database Service Class
