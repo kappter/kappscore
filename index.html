@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GameScore Pro</title>
-    <link rel="stylesheet" href="style.css">
     
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
@@ -12,11 +11,13 @@
     
     <!-- Chart.js for game summary charts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Landing Page -->
-    <div id="landingPage" class="page active">
-        <div class="container">
+    <div class="container">
+        <!-- Landing Page -->
+        <div id="landing" class="page active">
             <header>
                 <div class="header-content">
                     <div class="header-left">
@@ -25,138 +26,218 @@
                     </div>
                     <div class="header-right">
                         <div class="connection-status">
-                            <span class="status-dot" id="connectionDot"></span>
-                            <span class="status-text" id="connectionText">Connecting...</span>
+                            <div class="status-dot"></div>
+                            <span>Connecting...</span>
                         </div>
-                        <button id="exportBtn" class="export-btn">📊 Export</button>
-                        <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
+                        <button id="themeToggle" class="theme-toggle">
                             <span class="theme-icon">🌙</span>
                         </button>
                     </div>
                 </div>
             </header>
-            
-            <div class="options-grid">
-                <button id="createSessionBtn" class="option-tile">
-                    <div class="tile-icon">🎮</div>
-                    <h2>Create New Session</h2>
-                    <p>Start a new game and be the scorekeeper</p>
-                </button>
-                <button id="joinSessionBtn" class="option-tile">
-                    <div class="tile-icon">👥</div>
-                    <h2>Join Session</h2>
-                    <p>Enter a code to join an existing game</p>
-                </button>
-            </div>
-        </div>
-    </div>
 
-    <!-- Create Session Page -->
-    <div id="createSessionPage" class="page">
-        <div class="container">
+            <main>
+                <div class="options-grid">
+                    <button id="createSessionBtn" class="option-tile">
+                        <div class="tile-icon">🎮</div>
+                        <h2>Create New Session</h2>
+                        <p>Start a new game and be the scorekeeper</p>
+                    </button>
+                    <button id="joinSessionBtn" class="option-tile">
+                        <div class="tile-icon">👥</div>
+                        <h2>Join Session</h2>
+                        <p>Enter a code to join an existing game</p>
+                    </button>
+                </div>
+            </main>
+        </div>
+
+        <!-- Create Session Page -->
+        <div id="createSession" class="page">
             <header>
                 <div class="header-content">
                     <div class="header-left">
-                        <button id="backToLanding" class="back-btn">← Back</button>
+                        <button class="back-btn">← Back</button>
                         <h1>Create New Session</h1>
                     </div>
                     <div class="header-right">
                         <div class="connection-status">
-                            <span class="status-dot" id="connectionDot2"></span>
-                            <span class="status-text" id="connectionText2">Connecting...</span>
+                            <div class="status-dot"></div>
+                            <span>Connecting...</span>
                         </div>
-                        <button class="theme-toggle" onclick="app.toggleTheme()" aria-label="Toggle dark mode">
+                        <button id="themeToggle" class="theme-toggle">
                             <span class="theme-icon">🌙</span>
                         </button>
                     </div>
                 </div>
             </header>
-            
-            <form id="createSessionForm" class="session-form">
-                <div class="form-group">
-                    <label for="sessionName">Session Name (Optional)</label>
-                    <input type="text" id="sessionName" placeholder="e.g., Friday Night Cards">
-                </div>
-                
-                <div class="form-group">
-                    <label for="numPlayers">Number of Players</label>
-                    <div class="number-input">
-                        <button type="button" id="decreasePlayer" class="number-btn">-</button>
-                        <input type="number" id="numPlayers" value="2" min="1" max="12" readonly>
-                        <button type="button" id="increasePlayer" class="number-btn">+</button>
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label for="startingScore">Starting Score</label>
-                    <input type="number" id="startingScore" value="0" step="1">
-                </div>
-                
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="allowDecimals">
-                        Allow decimal scores
-                    </label>
-                </div>
-                
-                <div class="form-group">
-                    <label for="targetScore">Target Score (Optional)</label>
-                    <input type="number" id="targetScore" placeholder="e.g., 100">
-                </div>
-                
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="playAfterTarget">
-                        Continue playing after target score is reached
-                    </label>
-                </div>
-                
-                <button type="submit" class="primary-btn">🎮 Create Session</button>
-            </form>
-        </div>
-    </div>
 
-    <!-- Join Session Page -->
-    <div id="joinSessionPage" class="page">
-        <div class="container">
+            <main>
+                <form id="createSessionForm" class="session-form">
+                    <div class="form-group">
+                        <label for="playerCount">Number of Players</label>
+                        <div class="number-input">
+                            <button type="button" id="decreasePlayerCount" class="number-btn">−</button>
+                            <input type="number" id="playerCount" name="playerCount" value="2" min="1" max="12" readonly>
+                            <button type="button" id="increasePlayerCount" class="number-btn">+</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="sessionName">Session Name (Optional)</label>
+                        <input type="text" id="sessionName" name="sessionName" placeholder="e.g., Friday Night Cards">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="startingScore">Starting Score</label>
+                        <input type="number" id="startingScore" name="startingScore" value="0" step="1">
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="allowDecimals">
+                            Allow decimal scores (e.g., 1.5)
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="targetScore">Target Score (Optional)</label>
+                        <input type="number" id="targetScore" name="targetScore" placeholder="e.g., 100">
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="continueAfterTarget">
+                            Continue playing after target score is reached
+                        </label>
+                    </div>
+
+                    <button type="submit" class="primary-btn">Create Session</button>
+                </form>
+            </main>
+        </div>
+
+        <!-- Join Session Page -->
+        <div id="joinSession" class="page">
             <header>
                 <div class="header-content">
                     <div class="header-left">
-                        <button id="backToLandingFromJoin" class="back-btn">← Back</button>
+                        <button class="back-btn">← Back</button>
                         <h1>Join Session</h1>
                     </div>
                     <div class="header-right">
                         <div class="connection-status">
-                            <span class="status-dot" id="connectionDot3"></span>
-                            <span class="status-text" id="connectionText3">Connecting...</span>
+                            <div class="status-dot"></div>
+                            <span>Connecting...</span>
                         </div>
-                        <button class="theme-toggle" onclick="app.toggleTheme()" aria-label="Toggle dark mode">
+                        <button id="themeToggle" class="theme-toggle">
                             <span class="theme-icon">🌙</span>
                         </button>
                     </div>
                 </div>
             </header>
-            
-            <form id="joinSessionForm" class="session-form">
-                <div class="form-group">
-                    <label for="joinCode">Session Code</label>
-                    <input type="text" id="joinCode" placeholder="Enter 6-character code" maxlength="6" style="text-transform: uppercase;" required>
+
+            <main>
+                <form id="joinSessionForm" class="session-form">
+                    <div class="form-group">
+                        <label for="sessionCode">Session Code</label>
+                        <input type="text" id="sessionCode" name="sessionCode" placeholder="Enter 6-character code" maxlength="6" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="playerName">Your Name</label>
+                        <input type="text" id="playerName" name="playerName" placeholder="Enter your name" required>
+                    </div>
+
+                    <button type="submit" class="primary-btn">Join Session</button>
+                </form>
+            </main>
+        </div>
+
+        <!-- Scorekeeper Page -->
+        <div id="scorekeeper" class="page">
+            <header>
+                <div class="header-content">
+                    <div class="header-left">
+                        <h1>Session: <span id="sessionCode">------</span></h1>
+                        <p>Scorekeeper Mode</p>
+                    </div>
+                    <div class="header-right">
+                        <div class="connection-status">
+                            <div class="status-dot"></div>
+                            <span>Connecting...</span>
+                        </div>
+                        <button id="exportBtn" class="export-btn">📊 Export</button>
+                        <button id="summaryBtn" class="summary-btn">📈 Summary</button>
+                        <button id="showQRBtn" class="secondary-btn">📱 QR Code</button>
+                        <button id="themeToggle" class="theme-toggle">
+                            <span class="theme-icon">🌙</span>
+                        </button>
+                    </div>
                 </div>
-                
-                <div class="form-group">
-                    <label for="playerName">Your Name</label>
-                    <input type="text" id="playerName" placeholder="Enter your name" required>
+            </header>
+
+            <main>
+                <div id="playersGrid" class="players-grid">
+                    <!-- Player tiles will be generated here -->
                 </div>
-                
-                <button type="submit" class="primary-btn">👥 Join Session</button>
-            </form>
+
+                <div class="game-controls">
+                    <button id="resetScoresBtn" class="secondary-btn">🔄 Reset All Scores</button>
+                    <button id="newRoundBtn" class="secondary-btn">🎯 New Round</button>
+                    <button id="endSessionBtn" class="danger-btn">🛑 End Session</button>
+                </div>
+            </main>
+        </div>
+
+        <!-- Player View Page -->
+        <div id="playerView" class="page">
+            <header>
+                <div class="header-content">
+                    <div class="header-left">
+                        <h1>Session: <span id="playerViewSessionCode">------</span></h1>
+                        <p id="playerViewSessionName">Game Session</p>
+                    </div>
+                    <div class="header-right">
+                        <div class="connection-status">
+                            <div class="status-dot"></div>
+                            <span>Connecting...</span>
+                        </div>
+                        <button id="themeToggle" class="theme-toggle">
+                            <span class="theme-icon">🌙</span>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <main>
+                <div class="player-view-info">
+                    <div class="view-mode-indicator">
+                        <span class="indicator-icon">👁️</span>
+                        <span>Player View - Scores update automatically</span>
+                    </div>
+                </div>
+
+                <div id="playerViewGrid" class="players-grid">
+                    <!-- Player tiles will be generated here -->
+                </div>
+
+                <div class="last-updated">
+                    <small id="lastUpdated">Last updated: --:--:--</small>
+                </div>
+
+                <div class="player-actions">
+                    <button onclick="refreshScores()" class="secondary-btn">🔄 Refresh</button>
+                    <button onclick="exportGameData()" class="secondary-btn">📊 Export</button>
+                    <button onclick="showGameSummary()" class="secondary-btn">📈 Summary</button>
+                    <button onclick="leaveSession()" class="danger-btn">🚪 Leave Session</button>
+                </div>
+            </main>
         </div>
     </div>
 
-    <!-- Firebase Configuration -->
+    <!-- Load Firebase configuration and main script -->
     <script src="firebase-config.js"></script>
-    
-    <!-- Main Application Script -->
     <script src="script.js"></script>
 </body>
 </html>
