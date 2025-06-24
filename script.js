@@ -106,12 +106,36 @@ function showPage(pageId) {
     });
     
     // Show target page - use the exact IDs from HTML
-    const targetPage = document.getElementById(pageId + 'Page');
+    let targetPageId;
+    switch(pageId) {
+        case 'landing':
+            targetPageId = 'landingPage';
+            break;
+        case 'createSession':
+            targetPageId = 'createSessionPage';
+            break;
+        case 'joinSession':
+            targetPageId = 'joinSessionPage';
+            break;
+        case 'scorekeeper':
+            targetPageId = 'scorekeeperPage';
+            break;
+        case 'playerView':
+            targetPageId = 'playerViewPage';
+            break;
+        default:
+            targetPageId = pageId;
+    }
+    
+    const targetPage = document.getElementById(targetPageId);
     if (targetPage) {
         targetPage.classList.add('active');
         console.log('Page shown successfully:', pageId);
     } else {
-        console.error('Page not found:', pageId + 'Page');
+        console.error('Page not found:', targetPageId);
+        // List all available pages for debugging
+        const allPages = document.querySelectorAll('.page');
+        console.log('Available pages:', Array.from(allPages).map(p => p.id));
     }
 }
 
