@@ -1,4 +1,4 @@
-// GameScore Pro - Enhanced with Proper Player View
+// GameScore Pro - Minimal Fix for Page Navigation
 
 // Global variables
 let currentSession = null;
@@ -93,8 +93,8 @@ function initializeApp() {
     bindEventListeners();
     console.log('Event listeners bound successfully');
     
-    // Show landing page
-    showPage('landing');
+    // Landing page is already active by default, no need to show it
+    console.log('Landing page should be visible');
 }
 
 function showPage(pageId) {
@@ -105,13 +105,13 @@ function showPage(pageId) {
         page.classList.remove('active');
     });
     
-    // Show target page
+    // Show target page - use the exact IDs from HTML
     const targetPage = document.getElementById(pageId + 'Page');
     if (targetPage) {
         targetPage.classList.add('active');
         console.log('Page shown successfully:', pageId);
     } else {
-        console.error('Page not found:', pageId);
+        console.error('Page not found:', pageId + 'Page');
     }
 }
 
@@ -135,19 +135,19 @@ function bindEventListeners() {
     }
     
     // Back buttons
-    document.querySelectorAll('.back-btn').forEach(btn => {
+    document.querySelectorAll('.back-btn, #backToLanding').forEach(btn => {
         btn.addEventListener('click', () => {
             showPage('landing');
         });
     });
     
     // Player count controls
-    const decreaseBtn = document.getElementById('decreasePlayerCount');
-    const increaseBtn = document.getElementById('increasePlayerCount');
+    const decreaseBtn = document.getElementById('decreasePlayer');
+    const increaseBtn = document.getElementById('increasePlayer');
     
     if (decreaseBtn) {
         decreaseBtn.addEventListener('click', () => {
-            const input = document.getElementById('playerCount');
+            const input = document.getElementById('numPlayers');
             const current = parseInt(input.value);
             if (current > 1) {
                 input.value = current - 1;
@@ -157,7 +157,7 @@ function bindEventListeners() {
     
     if (increaseBtn) {
         increaseBtn.addEventListener('click', () => {
-            const input = document.getElementById('playerCount');
+            const input = document.getElementById('numPlayers');
             const current = parseInt(input.value);
             if (current < 12) {
                 input.value = current + 1;
@@ -183,18 +183,6 @@ function bindEventListeners() {
         themeToggle.addEventListener('click', toggleTheme);
     }
     
-    // Export and summary buttons
-    const exportBtn = document.getElementById('exportBtn');
-    const summaryBtn = document.getElementById('summaryBtn');
-    
-    if (exportBtn) {
-        exportBtn.addEventListener('click', exportGameData);
-    }
-    
-    if (summaryBtn) {
-        summaryBtn.addEventListener('click', showGameSummary);
-    }
-    
     console.log('Event listeners bound successfully');
 }
 
@@ -202,14 +190,16 @@ function handleCreateSession(e) {
     e.preventDefault();
     console.log('Create session form submitted');
     
-    const formData = new FormData(e.target);
+    const sessionName = document.getElementById('sessionName').value || 'Game Session';
+    const playerCount = parseInt(document.getElementById('numPlayers').value);
+    const startingScore = parseFloat(document.getElementById('startingScore').value) || 0;
+    const allowDecimals = document.getElementById('allowDecimals').checked;
+    
     const sessionData = {
-        name: formData.get('sessionName') || 'Game Session',
-        playerCount: parseInt(formData.get('playerCount')),
-        startingScore: parseFloat(formData.get('startingScore')) || 0,
-        allowDecimals: formData.get('allowDecimals') === 'on',
-        targetScore: parseFloat(formData.get('targetScore')) || null,
-        continueAfterTarget: formData.get('continueAfterTarget') === 'on'
+        name: sessionName,
+        playerCount: playerCount,
+        startingScore: startingScore,
+        allowDecimals: allowDecimals
     };
     
     console.log('Session data:', sessionData);
@@ -262,7 +252,6 @@ function createSession(sessionData) {
     
     // Save to Firebase if available
     if (firebaseReady) {
-        console.log('Firebase ready status for saving:', firebaseReady);
         console.log('Saving session to Firebase...');
         saveSessionToFirebase(currentSession)
             .then(() => {
@@ -283,9 +272,8 @@ function handleJoinSession(e) {
     e.preventDefault();
     console.log('Join session form submitted');
     
-    const formData = new FormData(e.target);
-    const sessionCode = formData.get('sessionCode').toUpperCase();
-    const playerName = formData.get('playerName') || 'Player';
+    const sessionCode = document.getElementById('joinCode').value.toUpperCase();
+    const playerName = document.getElementById('playerName').value || 'Player';
     
     console.log('Joining session:', sessionCode, 'as:', playerName);
     
@@ -436,14 +424,9 @@ function createPlayerTile(player, index, isEditable) {
     tile.className = 'player-tile';
     tile.setAttribute('data-player-id', player.id);
     
-    if (!isEditable && currentPlayer && player.id === currentPlayer.id) {
-        tile.classList.add('current-player');
-    }
-    
     tile.innerHTML = `
         <div class="player-header">
-            <h3 class="player-name" ${isEditable || (currentPlayer && player.id === currentPlayer.id) ? 'contenteditable="true"' : ''}>${player.name}</h3>
-            ${!isEditable && currentPlayer && player.id === currentPlayer.id ? '<span class="current-player-badge">You</span>' : ''}
+            <h3 class="player-name" ${isEditable ? 'contenteditable="true"' : ''}>${player.name}</h3>
         </div>
         
         <div class="player-score">
@@ -470,17 +453,15 @@ function createPlayerTile(player, index, isEditable) {
     `;
     
     // Add event listeners for editable elements
-    if (isEditable || (currentPlayer && player.id === currentPlayer.id)) {
+    if (isEditable) {
         const nameElement = tile.querySelector('.player-name');
         if (nameElement) {
             nameElement.addEventListener('blur', (e) => {
                 updatePlayerName(player.id, e.target.textContent);
             });
         }
-    }
-    
-    // Add preset button listeners
-    if (isEditable) {
+        
+        // Add preset button listeners
         const presetBtns = tile.querySelectorAll('.preset-btn');
         presetBtns.forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -528,12 +509,6 @@ function updatePlayerView() {
     // Generate player tiles for viewing
     generatePlayerTiles();
     
-    // Update last updated time
-    const lastUpdatedElement = document.getElementById('lastUpdated');
-    if (lastUpdatedElement) {
-        lastUpdatedElement.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
-    }
-    
     console.log('Player view updated successfully');
 }
 
@@ -547,17 +522,15 @@ function updateSessionInfo() {
     
     console.log('Session code to display:', currentSession.code);
     
-    // Update all session code elements
-    const codeElements = document.querySelectorAll('#sessionCode, #playerViewSessionCode');
-    codeElements.forEach(element => {
-        if (element) {
-            element.textContent = currentSession.code;
-            console.log('Updated session code element:', element.id, 'with:', currentSession.code);
-        }
-    });
+    // Update session code elements
+    const sessionCodeElement = document.getElementById('sessionCode');
+    if (sessionCodeElement) {
+        sessionCodeElement.textContent = currentSession.code;
+        console.log('Updated session code:', currentSession.code);
+    }
     
-    // Update session name in player view
-    const sessionNameElement = document.getElementById('playerViewSessionName');
+    // Update session name
+    const sessionNameElement = document.getElementById('sessionName');
     if (sessionNameElement) {
         sessionNameElement.textContent = currentSession.name || 'Game Session';
         console.log('Updated session name:', currentSession.name);
@@ -589,16 +562,6 @@ function updateScoreByAmount(playerId, amount) {
     player.score = newScore;
     
     console.log('Score change:', oldScore, '->', newScore);
-    
-    // Add to score history
-    scoreHistory.push({
-        playerId: playerId,
-        playerName: player.name,
-        oldScore: oldScore,
-        newScore: newScore,
-        change: amount,
-        timestamp: new Date().toISOString()
-    });
     
     // Update UI
     const scoreElement = document.querySelector(`[data-player-id="${playerId}"] .score-value, [data-player-id="${playerId}"] .compact-score-value`);
@@ -677,23 +640,6 @@ function generateSessionCode() {
     return result;
 }
 
-function refreshScores() {
-    console.log('Refreshing scores...');
-    if (currentSession && !isScorekeeper) {
-        loadSessionFromFirebase(currentSession.code)
-            .then((sessionData) => {
-                currentSession = sessionData;
-                players = sessionData.players;
-                updatePlayerView();
-                showMessage('Scores refreshed!', 'success');
-            })
-            .catch((error) => {
-                console.error('Failed to refresh scores:', error);
-                showMessage('Failed to refresh scores', 'error');
-            });
-    }
-}
-
 function toggleTheme() {
     const body = document.body;
     const currentTheme = body.getAttribute('data-theme');
@@ -712,16 +658,20 @@ function toggleTheme() {
 function updateConnectionStatus(isOnline) {
     console.log('Updating connection status:', isOnline);
     
-    const statusDot = document.getElementById('connectionDot');
-    const statusText = document.getElementById('connectionText');
+    const statusDots = document.querySelectorAll('#connectionDot, #connectionDot2');
+    const statusTexts = document.querySelectorAll('#connectionText, #connectionText2');
     
-    if (statusDot) {
-        statusDot.className = `status-dot ${isOnline ? 'online' : 'offline'}`;
-    }
+    statusDots.forEach(dot => {
+        if (dot) {
+            dot.className = `status-dot ${isOnline ? 'online' : 'offline'}`;
+        }
+    });
     
-    if (statusText) {
-        statusText.textContent = isOnline ? 'Online' : 'Offline';
-    }
+    statusTexts.forEach(text => {
+        if (text) {
+            text.textContent = isOnline ? 'Online' : 'Offline';
+        }
+    });
 }
 
 function showMessage(text, type = 'info') {
@@ -745,40 +695,6 @@ function showMessage(text, type = 'info') {
             message.remove();
         }
     }, 5000);
-}
-
-// Export and summary functions
-function exportGameData() {
-    if (!currentSession) {
-        showMessage('No active session to export', 'error');
-        return;
-    }
-    
-    const exportData = {
-        session: currentSession,
-        players: players,
-        scoreHistory: scoreHistory,
-        exportedAt: new Date().toISOString()
-    };
-    
-    const dataStr = JSON.stringify(exportData, null, 2);
-    const dataBlob = new Blob([dataStr], {type: 'application/json'});
-    
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(dataBlob);
-    link.download = `GameScore_${currentSession.code}_${new Date().toISOString().split('T')[0]}.json`;
-    link.click();
-    
-    showMessage('Game data exported successfully!', 'success');
-}
-
-function showGameSummary() {
-    if (!currentSession) {
-        showMessage('No active session to summarize', 'error');
-        return;
-    }
-    
-    showMessage('Game summary feature coming soon!', 'info');
 }
 
 // Initialize theme on load
