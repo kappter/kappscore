@@ -1,4 +1,4 @@
-// GameScore Pro JavaScript with Fixed Player Management and Real-time Features
+// GameScore Pro JavaScript with Game Summary and Analytics
 
 class GameScorePro {
     constructor() {
@@ -15,12 +15,14 @@ class GameScorePro {
             isScorekeeper: false,
             currentPlayerName: '',
             isOnline: false,
-            scoreHistory: []
+            scoreHistory: [],
+            sessionStartTime: null
         };
         
         this.firebaseService = null;
         this.sessionListener = null;
         this.eventListenersAttached = false;
+        this.chart = null;
         this.init();
     }
 
@@ -29,8 +31,26 @@ class GameScorePro {
         this.bindEvents();
         this.showPage('landingPage');
         
+        // Load Chart.js
+        await this.loadChartJS();
+        
         // Initialize Firebase
         await this.initializeFirebase();
+    }
+
+    // Load Chart.js library
+    async loadChartJS() {
+        return new Promise((resolve) => {
+            if (window.Chart) {
+                resolve();
+                return;
+            }
+            
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+            script.onload = resolve;
+            document.head.appendChild(script);
+        });
     }
 
     // Theme Management
@@ -65,7 +85,6 @@ class GameScorePro {
                 console.log('Firebase integration enabled');
                 this.gameState.isOnline = true;
                 
-                // Register for connection status updates
                 this.firebaseService.onConnectionChange((isOnline) => {
                     this.gameState.isOnline = isOnline;
                 });
@@ -128,7 +147,6 @@ class GameScorePro {
     async handleCreateSession(event) {
         event.preventDefault();
         
-        const formData = new FormData(event.target);
         const sessionData = {
             sessionName: document.getElementById('sessionName').value || 'Game Session',
             numPlayers: parseInt(document.getElementById('numPlayers').value),
@@ -141,30 +159,31 @@ class GameScorePro {
         // Update game state
         Object.assign(this.gameState, sessionData);
         this.gameState.isScorekeeper = true;
+        this.gameState.sessionStartTime = Date.now();
 
         try {
             if (this.firebaseService && this.firebaseService.isAvailable()) {
-                // Create session in Firebase
                 const sessionCode = await this.firebaseService.createSession({
                     ...sessionData,
-                    players: this.initializePlayers(sessionData.numPlayers, sessionData.startingScore)
+                    players: this.initializePlayers(sessionData.numPlayers, sessionData.startingScore),
+                    sessionStartTime: this.gameState.sessionStartTime
                 });
                 
                 this.gameState.sessionCode = sessionCode;
                 
-                // Listen for session updates
                 this.firebaseService.listenToSession(sessionCode, (sessionData) => {
                     if (sessionData) {
                         this.updateGameStateFromFirebase(sessionData);
                     }
                 });
             } else {
-                // Offline mode
                 this.gameState.sessionCode = this.generateSessionCode();
                 this.gameState.players = this.initializePlayers(sessionData.numPlayers, sessionData.startingScore);
                 console.log('Created local session:', this.gameState.sessionCode);
             }
 
+            // Initialize score history with starting scores
+            this.initializeScoreHistory();
             this.showScorekeeperInterface();
         } catch (error) {
             console.error('Error creating session:', error);
@@ -186,9 +205,26 @@ class GameScorePro {
         return players;
     }
 
+    // Initialize Score History
+    initializeScoreHistory() {
+        this.gameState.scoreHistory = [];
+        
+        // Add initial scores to history
+        this.gameState.players.forEach(player => {
+            this.gameState.scoreHistory.push({
+                playerId: player.id,
+                playerName: player.name,
+                oldScore: null,
+                newScore: player.score,
+                change: 0,
+                timestamp: this.gameState.sessionStartTime,
+                isInitial: true
+            });
+        });
+    }
+
     // Show Scorekeeper Interface
     showScorekeeperInterface() {
-        // Create scorekeeper page if it doesn't exist
         let scorekeeperPage = document.getElementById('scorekeeperPage');
         if (!scorekeeperPage) {
             scorekeeperPage = this.createScorekeeperPage();
@@ -218,6 +254,7 @@ class GameScorePro {
                                 <span class="status-dot"></span>
                                 <span class="status-text">Connecting...</span>
                             </div>
+                            <button id="gameSummaryBtn" class="summary-btn">📈 Summary</button>
                             <button id="showQRBtn" class="secondary-btn">📱 QR Code</button>
                             <button class="theme-toggle" onclick="app.toggleTheme()" aria-label="Toggle dark mode">
                                 <span class="theme-icon">🌙</span>
@@ -240,6 +277,7 @@ class GameScorePro {
 
         // Bind scorekeeper events
         setTimeout(() => {
+            document.getElementById('gameSummaryBtn')?.addEventListener('click', () => this.showGameSummary());
             document.getElementById('showQRBtn')?.addEventListener('click', () => this.showQRCode());
             document.getElementById('resetScoresBtn')?.addEventListener('click', () => this.resetAllScores());
             document.getElementById('newRoundBtn')?.addEventListener('click', () => this.startNewRound());
@@ -254,12 +292,10 @@ class GameScorePro {
         const playersGrid = document.getElementById('playersGrid');
         if (!playersGrid) return;
 
-        // Set grid data attribute for responsive layout
         playersGrid.setAttribute('data-player-count', this.gameState.players.length);
-        
         playersGrid.innerHTML = '';
 
-        this.gameState.players.forEach((player, index) => {
+        this.gameState.players.forEach((player) => {
             const tile = this.createPlayerTile(player, true);
             playersGrid.appendChild(tile);
         });
@@ -299,7 +335,6 @@ class GameScorePro {
         `;
 
         if (isEditable) {
-            // Bind events for this specific tile
             setTimeout(() => {
                 this.bindPlayerTileEvents(tile, player.id);
             }, 50);
@@ -310,18 +345,12 @@ class GameScorePro {
 
     // Bind Player Tile Events
     bindPlayerTileEvents(tile, playerId) {
-        // Score control buttons
         const increaseBtn = tile.querySelector('.increase-btn');
         const decreaseBtn = tile.querySelector('.decrease-btn');
         const customAmountInput = tile.querySelector('.custom-amount');
         const presetButtons = tile.querySelectorAll('.preset-btn');
         const playerNameElement = tile.querySelector('.player-name');
 
-        // Remove existing listeners to prevent duplicates
-        increaseBtn?.removeEventListener('click', this.handleScoreIncrease);
-        decreaseBtn?.removeEventListener('click', this.handleScoreDecrease);
-
-        // Add score control listeners
         increaseBtn?.addEventListener('click', (e) => {
             e.stopPropagation();
             const amount = parseFloat(customAmountInput?.value || 1);
@@ -334,7 +363,6 @@ class GameScorePro {
             this.updatePlayerScore(playerId, -amount);
         });
 
-        // Preset buttons
         presetButtons?.forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -346,7 +374,6 @@ class GameScorePro {
             });
         });
 
-        // Player name editing
         playerNameElement?.addEventListener('blur', (e) => {
             const newName = e.target.textContent.trim();
             if (newName && newName !== this.getPlayer(playerId)?.name) {
@@ -373,7 +400,6 @@ class GameScorePro {
         const oldScore = player.score;
         const newScore = Math.max(0, oldScore + amount);
         
-        // Update local state immediately (optimistic update)
         player.score = newScore;
         this.updatePlayerTileScore(playerId, newScore);
         
@@ -387,19 +413,16 @@ class GameScorePro {
             timestamp: Date.now()
         });
 
-        // Update Firebase if available
         if (this.firebaseService && this.firebaseService.isAvailable()) {
             try {
                 await this.firebaseService.updatePlayerScore(this.gameState.sessionCode, playerId, newScore);
             } catch (error) {
                 console.error('Failed to update score in Firebase:', error);
-                // Revert optimistic update on failure
                 player.score = oldScore;
                 this.updatePlayerTileScore(playerId, oldScore);
             }
         }
 
-        // Check for target score achievement
         this.checkTargetScore(player);
     }
 
@@ -411,12 +434,19 @@ class GameScorePro {
         const oldName = player.name;
         player.name = newName;
 
+        // Update name in score history
+        this.gameState.scoreHistory.forEach(entry => {
+            if (entry.playerId === playerId) {
+                entry.playerName = newName;
+            }
+        });
+
         if (this.firebaseService && this.firebaseService.isAvailable()) {
             try {
                 await this.firebaseService.updatePlayerName(this.gameState.sessionCode, playerId, newName);
             } catch (error) {
                 console.error('Failed to update name in Firebase:', error);
-                player.name = oldName; // Revert on failure
+                player.name = oldName;
             }
         }
     }
@@ -433,7 +463,6 @@ class GameScorePro {
         if (scoreElement) {
             scoreElement.textContent = newScore;
             
-            // Add animation
             scoreElement.classList.add('score-updated');
             setTimeout(() => {
                 scoreElement.classList.remove('score-updated');
@@ -454,10 +483,373 @@ class GameScorePro {
         }
     }
 
+    // Show Game Summary with Charts
+    showGameSummary() {
+        if (this.gameState.scoreHistory.length === 0) {
+            this.showMessage('No score data available yet.', 'warning');
+            return;
+        }
+
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay summary-modal';
+        modal.innerHTML = `
+            <div class="modal-content summary-content">
+                <div class="modal-header">
+                    <h3>📈 Game Summary</h3>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="summary-tabs">
+                        <button class="tab-btn active" data-tab="chart">Score Progress</button>
+                        <button class="tab-btn" data-tab="stats">Statistics</button>
+                        <button class="tab-btn" data-tab="timeline">Timeline</button>
+                    </div>
+                    
+                    <div class="tab-content">
+                        <div id="chartTab" class="tab-panel active">
+                            <div class="chart-container">
+                                <canvas id="scoreChart"></canvas>
+                            </div>
+                        </div>
+                        
+                        <div id="statsTab" class="tab-panel">
+                            <div class="stats-grid">
+                                ${this.generateStatsHTML()}
+                            </div>
+                        </div>
+                        
+                        <div id="timelineTab" class="tab-panel">
+                            <div class="timeline-container">
+                                ${this.generateTimelineHTML()}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="summary-actions">
+                        <button id="exportSummaryBtn" class="primary-btn">📊 Export Summary</button>
+                        <button id="exportChartBtn" class="secondary-btn">📈 Export Chart</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        // Initialize tabs
+        this.initializeSummaryTabs(modal);
+
+        // Create chart
+        setTimeout(() => {
+            this.createScoreChart();
+        }, 100);
+
+        // Bind events
+        modal.querySelector('.modal-close').addEventListener('click', () => {
+            this.destroyChart();
+            document.body.removeChild(modal);
+        });
+
+        modal.querySelector('#exportSummaryBtn').addEventListener('click', () => {
+            this.exportSummaryReport();
+        });
+
+        modal.querySelector('#exportChartBtn').addEventListener('click', () => {
+            this.exportChart();
+        });
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                this.destroyChart();
+                document.body.removeChild(modal);
+            }
+        });
+    }
+
+    // Initialize Summary Tabs
+    initializeSummaryTabs(modal) {
+        const tabBtns = modal.querySelectorAll('.tab-btn');
+        const tabPanels = modal.querySelectorAll('.tab-panel');
+
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const targetTab = btn.getAttribute('data-tab');
+                
+                tabBtns.forEach(b => b.classList.remove('active'));
+                tabPanels.forEach(p => p.classList.remove('active'));
+                
+                btn.classList.add('active');
+                modal.querySelector(`#${targetTab}Tab`).classList.add('active');
+            });
+        });
+    }
+
+    // Create Score Chart
+    createScoreChart() {
+        const ctx = document.getElementById('scoreChart');
+        if (!ctx || !window.Chart) return;
+
+        const chartData = this.prepareChartData();
+        
+        this.chart = new Chart(ctx, {
+            type: 'line',
+            data: chartData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Score Progress Over Time'
+                    },
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                },
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Time'
+                        },
+                        type: 'time',
+                        time: {
+                            displayFormats: {
+                                minute: 'HH:mm',
+                                hour: 'HH:mm'
+                            }
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Score'
+                        },
+                        beginAtZero: true
+                    }
+                },
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                }
+            }
+        });
+    }
+
+    // Prepare Chart Data
+    prepareChartData() {
+        const playerColors = [
+            '#3b82f6', '#ef4444', '#10b981', '#f59e0b',
+            '#8b5cf6', '#f97316', '#06b6d4', '#84cc16',
+            '#ec4899', '#6366f1', '#14b8a6', '#f43f5e'
+        ];
+
+        const datasets = this.gameState.players.map((player, index) => {
+            const playerHistory = this.gameState.scoreHistory
+                .filter(entry => entry.playerId === player.id)
+                .map(entry => ({
+                    x: new Date(entry.timestamp),
+                    y: entry.newScore
+                }));
+
+            return {
+                label: player.name,
+                data: playerHistory,
+                borderColor: playerColors[index % playerColors.length],
+                backgroundColor: playerColors[index % playerColors.length] + '20',
+                tension: 0.1,
+                fill: false
+            };
+        });
+
+        return { datasets };
+    }
+
+    // Generate Statistics HTML
+    generateStatsHTML() {
+        const stats = this.calculateGameStats();
+        
+        return `
+            <div class="stat-card">
+                <h4>Game Duration</h4>
+                <p class="stat-value">${stats.duration}</p>
+            </div>
+            <div class="stat-card">
+                <h4>Total Score Changes</h4>
+                <p class="stat-value">${stats.totalChanges}</p>
+            </div>
+            <div class="stat-card">
+                <h4>Highest Score</h4>
+                <p class="stat-value">${stats.highestScore.score} (${stats.highestScore.player})</p>
+            </div>
+            <div class="stat-card">
+                <h4>Most Active Player</h4>
+                <p class="stat-value">${stats.mostActive.player} (${stats.mostActive.changes} changes)</p>
+            </div>
+            ${this.gameState.players.map(player => {
+                const playerStats = stats.playerStats[player.id];
+                return `
+                    <div class="player-stat-card">
+                        <h4>${player.name}</h4>
+                        <div class="player-stats">
+                            <span>Current: ${player.score}</span>
+                            <span>Changes: ${playerStats.totalChanges}</span>
+                            <span>Net: ${playerStats.netChange > 0 ? '+' : ''}${playerStats.netChange}</span>
+                            <span>Avg per change: ${playerStats.avgChange.toFixed(1)}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        `;
+    }
+
+    // Calculate Game Statistics
+    calculateGameStats() {
+        const now = Date.now();
+        const duration = this.formatDuration(now - this.gameState.sessionStartTime);
+        
+        const nonInitialHistory = this.gameState.scoreHistory.filter(entry => !entry.isInitial);
+        const totalChanges = nonInitialHistory.length;
+        
+        let highestScore = { score: 0, player: '' };
+        let mostActive = { player: '', changes: 0 };
+        
+        const playerStats = {};
+        
+        this.gameState.players.forEach(player => {
+            const playerHistory = nonInitialHistory.filter(entry => entry.playerId === player.id);
+            const totalChanges = playerHistory.length;
+            const netChange = player.score - this.gameState.startingScore;
+            const avgChange = totalChanges > 0 ? netChange / totalChanges : 0;
+            
+            playerStats[player.id] = {
+                totalChanges,
+                netChange,
+                avgChange
+            };
+            
+            if (player.score > highestScore.score) {
+                highestScore = { score: player.score, player: player.name };
+            }
+            
+            if (totalChanges > mostActive.changes) {
+                mostActive = { player: player.name, changes: totalChanges };
+            }
+        });
+        
+        return {
+            duration,
+            totalChanges,
+            highestScore,
+            mostActive,
+            playerStats
+        };
+    }
+
+    // Generate Timeline HTML
+    generateTimelineHTML() {
+        const timeline = this.gameState.scoreHistory
+            .filter(entry => !entry.isInitial)
+            .sort((a, b) => b.timestamp - a.timestamp)
+            .slice(0, 20) // Show last 20 events
+            .map(entry => {
+                const time = new Date(entry.timestamp).toLocaleTimeString();
+                const changeText = entry.change > 0 ? `+${entry.change}` : `${entry.change}`;
+                const changeClass = entry.change > 0 ? 'positive' : 'negative';
+                
+                return `
+                    <div class="timeline-item">
+                        <div class="timeline-time">${time}</div>
+                        <div class="timeline-content">
+                            <strong>${entry.playerName}</strong> 
+                            <span class="score-change ${changeClass}">${changeText}</span>
+                            <span class="score-result">→ ${entry.newScore}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+        return timeline || '<p>No score changes yet.</p>';
+    }
+
+    // Format Duration
+    formatDuration(ms) {
+        const seconds = Math.floor(ms / 1000);
+        const minutes = Math.floor(seconds / 60);
+        const hours = Math.floor(minutes / 60);
+        
+        if (hours > 0) {
+            return `${hours}h ${minutes % 60}m`;
+        } else if (minutes > 0) {
+            return `${minutes}m ${seconds % 60}s`;
+        } else {
+            return `${seconds}s`;
+        }
+    }
+
+    // Export Summary Report
+    exportSummaryReport() {
+        const stats = this.calculateGameStats();
+        const reportData = {
+            sessionInfo: {
+                code: this.gameState.sessionCode,
+                name: this.gameState.sessionName,
+                startTime: new Date(this.gameState.sessionStartTime).toISOString(),
+                duration: stats.duration,
+                playerCount: this.gameState.numPlayers
+            },
+            currentScores: this.gameState.players.map(p => ({
+                name: p.name,
+                score: p.score
+            })),
+            statistics: stats,
+            scoreHistory: this.gameState.scoreHistory,
+            settings: {
+                startingScore: this.gameState.startingScore,
+                targetScore: this.gameState.targetScore,
+                allowDecimals: this.gameState.allowDecimals
+            }
+        };
+
+        const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `gamescore-summary-${this.gameState.sessionCode}-${Date.now()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        this.showMessage('Summary report exported successfully!', 'success');
+    }
+
+    // Export Chart as Image
+    exportChart() {
+        if (!this.chart) return;
+        
+        const url = this.chart.toBase64Image();
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `gamescore-chart-${this.gameState.sessionCode}-${Date.now()}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        this.showMessage('Chart exported successfully!', 'success');
+    }
+
+    // Destroy Chart
+    destroyChart() {
+        if (this.chart) {
+            this.chart.destroy();
+            this.chart = null;
+        }
+    }
+
     // Update Game State from Firebase
     updateGameStateFromFirebase(sessionData) {
         if (sessionData.players) {
-            // Update player scores and names
             Object.keys(sessionData.players).forEach(playerId => {
                 const firebasePlayer = sessionData.players[playerId];
                 const localPlayer = this.getPlayer(playerId);
@@ -516,7 +908,6 @@ class GameScorePro {
 
     // Show Player View (Read-only)
     showPlayerView() {
-        // Implementation for player view would go here
         this.showMessage('Player view not yet implemented in this version.', 'info');
     }
 
@@ -534,7 +925,6 @@ class GameScorePro {
     showQRCode() {
         const qrUrl = `${window.location.origin}${window.location.pathname}?join=${this.gameState.sessionCode}`;
         
-        // Create modal
         const modal = document.createElement('div');
         modal.className = 'modal-overlay';
         modal.innerHTML = `
@@ -557,7 +947,6 @@ class GameScorePro {
 
         document.body.appendChild(modal);
 
-        // Close modal events
         modal.querySelector('.modal-close').addEventListener('click', () => {
             document.body.removeChild(modal);
         });
@@ -576,8 +965,20 @@ class GameScorePro {
         const startingScore = this.gameState.startingScore;
         
         this.gameState.players.forEach(player => {
+            const oldScore = player.score;
             player.score = startingScore;
             this.updatePlayerTileScore(player.id, startingScore);
+            
+            // Add to history
+            this.gameState.scoreHistory.push({
+                playerId: player.id,
+                playerName: player.name,
+                oldScore,
+                newScore: startingScore,
+                change: startingScore - oldScore,
+                timestamp: Date.now(),
+                isReset: true
+            });
         });
 
         if (this.firebaseService && this.firebaseService.isAvailable()) {
@@ -625,7 +1026,7 @@ class GameScorePro {
             sessionInfo: {
                 code: this.gameState.sessionCode,
                 name: this.gameState.sessionName,
-                startTime: new Date().toISOString(),
+                startTime: new Date(this.gameState.sessionStartTime).toISOString(),
                 playerCount: this.gameState.numPlayers
             },
             players: this.gameState.players,
@@ -637,7 +1038,6 @@ class GameScorePro {
             }
         };
 
-        // Create and download JSON file
         const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -662,14 +1062,12 @@ class GameScorePro {
 
         document.body.appendChild(message);
 
-        // Auto-remove after 5 seconds
         setTimeout(() => {
             if (document.body.contains(message)) {
                 document.body.removeChild(message);
             }
         }, 5000);
 
-        // Manual close
         message.querySelector('.message-close').addEventListener('click', () => {
             if (document.body.contains(message)) {
                 document.body.removeChild(message);
@@ -679,6 +1077,7 @@ class GameScorePro {
 
     // Cleanup
     cleanup() {
+        this.destroyChart();
         if (this.firebaseService) {
             this.firebaseService.cleanup();
         }
