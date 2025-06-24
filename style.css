@@ -1,4 +1,4 @@
-/* GameScore Pro - Complete CSS with Player View */
+/* GameScore Pro - Complete CSS with Enhanced Player View */
 
 /* Reset and Base Styles */
 * {
@@ -427,44 +427,85 @@ header {
     overflow: visible;
 }
 
-/* Grid layouts based on player count */
-.players-grid[data-player-count="1"] {
+/* Scorekeeper Grid - Full size tiles */
+.scorekeeper-grid[data-player-count="1"] {
     grid-template-columns: 1fr;
     max-width: 400px;
     margin: 0 auto;
 }
 
-.players-grid[data-player-count="2"] {
+.scorekeeper-grid[data-player-count="2"] {
     grid-template-columns: repeat(2, 1fr);
 }
 
-.players-grid[data-player-count="3"] {
+.scorekeeper-grid[data-player-count="3"] {
     grid-template-columns: repeat(3, 1fr);
 }
 
-.players-grid[data-player-count="4"] {
+.scorekeeper-grid[data-player-count="4"] {
     grid-template-columns: repeat(2, 1fr);
     grid-template-rows: repeat(2, 1fr);
 }
 
-.players-grid[data-player-count="5"],
-.players-grid[data-player-count="6"] {
+.scorekeeper-grid[data-player-count="5"],
+.scorekeeper-grid[data-player-count="6"] {
     grid-template-columns: repeat(3, 1fr);
     grid-template-rows: repeat(2, 1fr);
 }
 
-.players-grid[data-player-count="7"],
-.players-grid[data-player-count="8"],
-.players-grid[data-player-count="9"] {
+.scorekeeper-grid[data-player-count="7"],
+.scorekeeper-grid[data-player-count="8"],
+.scorekeeper-grid[data-player-count="9"] {
     grid-template-columns: repeat(3, 1fr);
     grid-template-rows: repeat(3, 1fr);
 }
 
-.players-grid[data-player-count="10"],
-.players-grid[data-player-count="11"],
-.players-grid[data-player-count="12"] {
+.scorekeeper-grid[data-player-count="10"],
+.scorekeeper-grid[data-player-count="11"],
+.scorekeeper-grid[data-player-count="12"] {
     grid-template-columns: repeat(4, 1fr);
     grid-template-rows: repeat(3, 1fr);
+}
+
+/* Player View Grid - Compact tiles that fit all players */
+.player-view-grid {
+    gap: 1rem;
+    padding: 1rem 0;
+}
+
+.player-view-grid[data-player-count="1"] {
+    grid-template-columns: 1fr;
+    max-width: 200px;
+    margin: 0 auto;
+}
+
+.player-view-grid[data-player-count="2"] {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.player-view-grid[data-player-count="3"] {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.player-view-grid[data-player-count="4"] {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.player-view-grid[data-player-count="5"],
+.player-view-grid[data-player-count="6"] {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.player-view-grid[data-player-count="7"],
+.player-view-grid[data-player-count="8"] {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.player-view-grid[data-player-count="9"],
+.player-view-grid[data-player-count="10"],
+.player-view-grid[data-player-count="11"],
+.player-view-grid[data-player-count="12"] {
+    grid-template-columns: repeat(4, 1fr);
 }
 
 /* Enhanced Player Tiles */
@@ -494,6 +535,77 @@ header {
         0 6px 16px var(--shadow-medium);
 }
 
+/* Compact Player Tiles for Player View */
+.compact-tile {
+    min-height: 120px;
+    aspect-ratio: 1.2;
+    padding: 1rem;
+    border-width: 2px;
+}
+
+.compact-tile:hover {
+    transform: translateY(-1px);
+}
+
+.compact-player-header {
+    margin-bottom: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.compact-player-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--accent-primary);
+    margin: 0;
+    padding: 0.25rem;
+    border-radius: 4px;
+    transition: all 0.3s ease;
+    text-align: center;
+    line-height: 1.2;
+}
+
+.compact-player-name[contenteditable="true"]:hover {
+    background: var(--bg-secondary);
+    cursor: text;
+}
+
+.compact-player-name[contenteditable="true"]:focus {
+    outline: 2px solid var(--accent-secondary);
+    background: var(--bg-primary);
+}
+
+.you-badge {
+    background: var(--accent-color);
+    color: white;
+    padding: 0.15rem 0.4rem;
+    border-radius: 8px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.compact-player-score {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.compact-score-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    text-shadow: 0 2px 4px var(--shadow-light);
+    transition: all 0.3s ease;
+}
+
+.compact-score-value.score-updated {
+    animation: scoreUpdate 0.3s ease;
+}
+
+/* Regular Player Tiles */
 .player-header {
     margin-bottom: 1rem;
     display: flex;
@@ -665,6 +777,7 @@ header {
     padding: 1rem;
     margin-bottom: 1.5rem;
     border: 1px solid var(--border-color);
+    text-align: center;
 }
 
 .view-mode-indicator {
@@ -883,11 +996,16 @@ header {
         font-size: 1.3rem;
     }
     
-    .players-grid {
+    .scorekeeper-grid {
         grid-template-columns: 1fr !important;
         grid-template-rows: auto !important;
         gap: 1rem;
         padding: 1rem 0;
+    }
+    
+    .player-view-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 0.75rem;
     }
     
     .player-tile {
@@ -896,8 +1014,17 @@ header {
         padding: 1rem;
     }
     
+    .compact-tile {
+        min-height: 100px;
+        padding: 0.75rem;
+    }
+    
     .score-value {
         font-size: 2rem;
+    }
+    
+    .compact-score-value {
+        font-size: 1.5rem;
     }
     
     .session-info {
@@ -937,13 +1064,30 @@ header {
         font-size: 1.2rem;
     }
     
+    .player-view-grid {
+        grid-template-columns: 1fr !important;
+    }
+    
     .player-tile {
         padding: 0.75rem;
         min-height: 120px;
     }
     
+    .compact-tile {
+        min-height: 80px;
+        padding: 0.5rem;
+    }
+    
     .score-value {
         font-size: 1.8rem;
+    }
+    
+    .compact-score-value {
+        font-size: 1.3rem;
+    }
+    
+    .compact-player-name {
+        font-size: 0.8rem;
     }
     
     .preset-buttons {
