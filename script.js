@@ -1,4 +1,4 @@
-// GameScore Pro - Updated with Fixed Session Code Display
+// GameScore Pro - Corrected Firebase Connection Logic
 console.log('GameScore Pro initialized');
 
 // Global app state
@@ -33,23 +33,40 @@ function initializeApp() {
 function waitForFirebase() {
     console.log('Waiting for Firebase...');
     
-    // Check if Firebase is available
-    if (window.firebaseService) {
-        console.log('Firebase service found, setting up connection monitoring...');
+    // Check if Firebase is available using the correct global variables
+    if (window.firebaseDatabase && window.isFirebaseEnabled !== undefined) {
+        console.log('Firebase found, setting up connection monitoring...');
         
-        window.firebaseService.onConnectionChange((isOnline) => {
+        // Monitor Firebase connection status
+        const connectedRef = window.firebaseDatabase.ref('.info/connected');
+        connectedRef.on('value', (snapshot) => {
+            const isOnline = snapshot.val() === true;
             console.log('Firebase connection changed:', isOnline);
             firebaseReady = isOnline;
             updateConnectionStatus(isOnline);
             
             if (isOnline) {
-                console.log('Firebase is ready!');
+                console.log('Firebase is ready for operations!');
             }
         });
+        
+        // Also check the global flag
+        if (window.isFirebaseEnabled) {
+            firebaseReady = true;
+            updateConnectionStatus(true);
+        }
     } else {
-        console.log('Firebase service not found, running in offline mode');
+        console.log('Firebase not available, running in offline mode');
         firebaseReady = false;
         updateConnectionStatus(false);
+        
+        // Retry after a short delay in case Firebase is still loading
+        setTimeout(() => {
+            if (window.firebaseDatabase && !firebaseReady) {
+                console.log('Retrying Firebase connection...');
+                waitForFirebase();
+            }
+        }, 2000);
     }
 }
 
@@ -246,9 +263,9 @@ function createSession(sessionData) {
     showPage('scorekeeper');
     
     // Then try to save to Firebase
-    if (firebaseReady && window.firebaseService) {
+    if (firebaseReady && window.firebaseDatabase) {
         console.log('Saving session to Firebase...');
-        window.firebaseService.createSession(currentSession)
+        saveSessionToFirebase(currentSession)
             .then(() => {
                 console.log('Session saved to Firebase successfully');
                 showMessage('Session created and saved online!', 'success');
@@ -284,10 +301,12 @@ function handleJoinSession(event) {
 
 function joinSession(sessionCode, playerName) {
     console.log('Attempting to join session:', sessionCode);
+    console.log('Firebase ready status:', firebaseReady);
+    console.log('Firebase database available:', !!window.firebaseDatabase);
     
-    if (firebaseReady && window.firebaseService) {
+    if (firebaseReady && window.firebaseDatabase) {
         console.log('Joining via Firebase...');
-        window.firebaseService.joinSession(sessionCode, playerName)
+        loadSessionFromFirebase(sessionCode)
             .then((sessionData) => {
                 console.log('Joined session successfully:', sessionData);
                 currentSession = sessionData;
@@ -302,15 +321,111 @@ function joinSession(sessionCode, playerName) {
                 // Update UI and show player view
                 updatePlayerView();
                 showPage('playerView');
+                
+                // Set up real-time listeners
+                setupRealtimeListeners(sessionCode);
             })
             .catch(error => {
                 console.error('Error joining session:', error);
                 showMessage('Could not join session. Please check the code.', 'error');
             });
     } else {
-        console.log('Firebase not ready, cannot join session');
-        showMessage('Cannot join session - offline mode', 'error');
+        console.log('Firebase not ready - Ready:', firebaseReady, 'Database:', !!window.firebaseDatabase);
+        showMessage('Cannot join session - Firebase not connected. Please wait and try again.', 'error');
     }
+}
+
+// Firebase Operations
+function saveSessionToFirebase(session) {
+    return new Promise((resolve, reject) => {
+        if (!window.firebaseDatabase) {
+            reject(new Error('Firebase database not available'));
+            return;
+        }
+        
+        const sessionRef = window.firebaseDatabase.ref(`sessions/${session.code}`);
+        sessionRef.set({
+            metadata: {
+                name: session.name,
+                createdAt: session.createdAt,
+                playerCount: session.playerCount,
+                startingScore: session.startingScore,
+                allowDecimals: session.allowDecimals,
+                targetScore: session.targetScore,
+                continueAfterTarget: session.continueAfterTarget
+            },
+            players: session.players.reduce((acc, player) => {
+                acc[player.id] = player;
+                return acc;
+            }, {}),
+            scoreHistory: []
+        })
+        .then(() => resolve())
+        .catch(error => reject(error));
+    });
+}
+
+function loadSessionFromFirebase(sessionCode) {
+    return new Promise((resolve, reject) => {
+        if (!window.firebaseDatabase) {
+            reject(new Error('Firebase database not available'));
+            return;
+        }
+        
+        const sessionRef = window.firebaseDatabase.ref(`sessions/${sessionCode}`);
+        sessionRef.once('value')
+            .then((snapshot) => {
+                const data = snapshot.val();
+                if (!data) {
+                    reject(new Error('Session not found'));
+                    return;
+                }
+                
+                // Convert Firebase data back to session format
+                const session = {
+                    code: sessionCode,
+                    ...data.metadata,
+                    players: Object.values(data.players || {})
+                };
+                
+                players = session.players;
+                scoreHistory = data.scoreHistory || [];
+                
+                resolve(session);
+            })
+            .catch(error => reject(error));
+    });
+}
+
+function setupRealtimeListeners(sessionCode) {
+    if (!window.firebaseDatabase) return;
+    
+    console.log('Setting up real-time listeners for session:', sessionCode);
+    
+    // Listen for player updates
+    const playersRef = window.firebaseDatabase.ref(`sessions/${sessionCode}/players`);
+    playersRef.on('value', (snapshot) => {
+        const playersData = snapshot.val();
+        if (playersData) {
+            players = Object.values(playersData);
+            console.log('Players updated from Firebase:', players);
+            
+            // Update UI if we're in player view
+            if (!isScorekeeper) {
+                updatePlayerView();
+            }
+        }
+    });
+    
+    // Listen for score history updates
+    const historyRef = window.firebaseDatabase.ref(`sessions/${sessionCode}/scoreHistory`);
+    historyRef.on('value', (snapshot) => {
+        const historyData = snapshot.val();
+        if (historyData) {
+            scoreHistory = Object.values(historyData);
+            console.log('Score history updated from Firebase');
+        }
+    });
 }
 
 // Player Management
@@ -467,20 +582,27 @@ function updateScoreByAmount(playerId, delta) {
     updatePlayerScoreDisplay(playerId, newScore);
     
     // Save to Firebase
-    if (firebaseReady && window.firebaseService && currentSession) {
-        window.firebaseService.updatePlayerScore(currentSession.code, playerId, newScore)
-            .then(() => {
-                console.log('Player score updated in Firebase');
-            })
-            .catch(error => {
-                console.error('Error updating score in Firebase:', error);
-            });
+    if (firebaseReady && window.firebaseDatabase && currentSession) {
+        updatePlayerScoreInFirebase(currentSession.code, playerId, newScore);
     }
     
     // Check for target score
     if (currentSession?.targetScore && newScore >= currentSession.targetScore) {
         showMessage(`${player.name} reached the target score!`, 'success');
     }
+}
+
+function updatePlayerScoreInFirebase(sessionCode, playerId, newScore) {
+    if (!window.firebaseDatabase) return;
+    
+    const playerRef = window.firebaseDatabase.ref(`sessions/${sessionCode}/players/${playerId}/score`);
+    playerRef.set(newScore)
+        .then(() => {
+            console.log('Player score updated in Firebase');
+        })
+        .catch(error => {
+            console.error('Error updating score in Firebase:', error);
+        });
 }
 
 function updatePlayerScoreDisplay(playerId, newScore) {
@@ -501,23 +623,18 @@ function updatePlayerName(playerId, newName) {
     console.log('Updating player name:', playerId, newName);
     
     const player = players.find(p => p.id === playerId);
-    if (!player || !newName.trim()) return;
+    if (!player) return;
     
-    player.name = newName.trim();
+    player.name = newName;
     
-    // Save to Firebase
-    if (firebaseReady && window.firebaseService && currentSession) {
-        window.firebaseService.updatePlayerName(currentSession.code, playerId, newName)
-            .then(() => {
-                console.log('Player name updated in Firebase');
-            })
-            .catch(error => {
-                console.error('Error updating name in Firebase:', error);
-            });
+    // Update in Firebase if connected
+    if (firebaseReady && window.firebaseDatabase && currentSession) {
+        const playerRef = window.firebaseDatabase.ref(`sessions/${currentSession.code}/players/${playerId}/name`);
+        playerRef.set(newName);
     }
 }
 
-// UI Updates
+// Session Info Management
 function updateSessionInfo() {
     console.log('Updating session info...');
     
@@ -555,7 +672,6 @@ function updatePlayerView() {
         return;
     }
     
-    players = Object.values(currentSession.players || {});
     console.log('Players for view:', players);
     
     // Update session info
@@ -573,6 +689,88 @@ function updatePlayerView() {
     console.log('Player view updated successfully');
 }
 
+// Utility Functions
+function generateSessionCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 6; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+}
+
+function updateConnectionStatus(isOnline) {
+    console.log('Updating connection status:', isOnline);
+    
+    const statusElements = document.querySelectorAll('.connection-status');
+    statusElements.forEach(element => {
+        const dot = element.querySelector('.status-dot');
+        const text = element.querySelector('span');
+        
+        if (dot && text) {
+            if (isOnline) {
+                dot.className = 'status-dot online';
+                text.textContent = 'Online';
+            } else {
+                dot.className = 'status-dot offline';
+                text.textContent = 'Offline';
+            }
+        }
+    });
+}
+
+function showMessage(message, type = 'info') {
+    console.log('Showing message:', message, type);
+    
+    // Create message element
+    const messageEl = document.createElement('div');
+    messageEl.className = `message message-${type}`;
+    messageEl.innerHTML = `
+        <span>${message}</span>
+        <button class="message-close">×</button>
+    `;
+    
+    // Add to page
+    document.body.appendChild(messageEl);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (messageEl.parentNode) {
+            messageEl.parentNode.removeChild(messageEl);
+        }
+    }, 5000);
+    
+    // Manual close
+    messageEl.querySelector('.message-close').addEventListener('click', () => {
+        if (messageEl.parentNode) {
+            messageEl.parentNode.removeChild(messageEl);
+        }
+    });
+}
+
+// Theme Management
+function initializeTheme() {
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    updateThemeIcon(savedTheme);
+}
+
+function toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+    
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+    updateThemeIcon(newTheme);
+}
+
+function updateThemeIcon(theme) {
+    const icons = document.querySelectorAll('.theme-icon');
+    icons.forEach(icon => {
+        icon.textContent = theme === 'light' ? '🌙' : '☀️';
+    });
+}
+
 // Game Controls
 function resetAllScores() {
     if (!confirm('Are you sure you want to reset all scores?')) return;
@@ -584,43 +782,56 @@ function resetAllScores() {
         updatePlayerScoreDisplay(player.id, startingScore);
     });
     
-    // Add to history
-    scoreHistory.push({
-        action: 'reset_all',
-        timestamp: new Date().toISOString(),
-        note: 'All scores reset'
-    });
+    // Clear score history
+    scoreHistory = [];
     
-    showMessage('All scores have been reset', 'info');
+    // Update Firebase
+    if (firebaseReady && window.firebaseDatabase && currentSession) {
+        const sessionRef = window.firebaseDatabase.ref(`sessions/${currentSession.code}`);
+        sessionRef.child('players').set(players.reduce((acc, player) => {
+            acc[player.id] = player;
+            return acc;
+        }, {}));
+        sessionRef.child('scoreHistory').set([]);
+    }
+    
+    showMessage('All scores have been reset', 'success');
 }
 
 function startNewRound() {
-    if (!confirm('Start a new round? This will keep current scores.')) return;
+    if (!confirm('Start a new round? (Scores will be kept)')) return;
     
+    // Add round marker to history
     scoreHistory.push({
-        action: 'new_round',
+        type: 'round_start',
         timestamp: new Date().toISOString(),
-        note: 'New round started'
+        round: (scoreHistory.filter(h => h.type === 'round_start').length + 1)
     });
     
-    showMessage('New round started!', 'info');
+    showMessage('New round started!', 'success');
 }
 
 function endSession() {
     if (!confirm('Are you sure you want to end this session?')) return;
     
-    // Clean up
+    // Clean up Firebase listeners
+    if (window.firebaseDatabase && currentSession) {
+        window.firebaseDatabase.ref(`sessions/${currentSession.code}`).off();
+    }
+    
+    // Reset state
     currentSession = null;
     currentPlayer = null;
     isScorekeeper = false;
     players = [];
     scoreHistory = [];
     
-    showMessage('Session ended', 'info');
+    // Return to landing page
     showPage('landing');
+    showMessage('Session ended', 'info');
 }
 
-// Export and Summary
+// Export and Summary Functions
 function exportGameData() {
     if (!currentSession) {
         showMessage('No active session to export', 'error');
@@ -639,354 +850,22 @@ function exportGameData() {
     
     const link = document.createElement('a');
     link.href = URL.createObjectURL(dataBlob);
-    link.download = `gamescore-${currentSession.code}-${new Date().toISOString().split('T')[0]}.json`;
+    link.download = `GameScore_${currentSession.code}_${new Date().toISOString().split('T')[0]}.json`;
     link.click();
     
     showMessage('Game data exported successfully!', 'success');
 }
 
 function showGameSummary() {
+    showMessage('Game summary feature coming soon!', 'info');
+}
+
+function showQRCode() {
     if (!currentSession) {
-        showMessage('No active session to summarize', 'error');
+        showMessage('No active session', 'error');
         return;
     }
     
-    // Create and show summary modal
-    const modal = createSummaryModal();
-    document.body.appendChild(modal);
-}
-
-function createSummaryModal() {
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `
-        <div class="modal-content summary-content">
-            <div class="modal-header">
-                <h3>Game Summary - ${currentSession.code}</h3>
-                <button class="modal-close">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="summary-tabs">
-                    <button class="tab-btn active" data-tab="overview">Overview</button>
-                    <button class="tab-btn" data-tab="statistics">Statistics</button>
-                    <button class="tab-btn" data-tab="timeline">Timeline</button>
-                </div>
-                
-                <div class="tab-panel active" id="overview-panel">
-                    <div class="chart-container">
-                        <canvas id="scoreChart"></canvas>
-                    </div>
-                </div>
-                
-                <div class="tab-panel" id="statistics-panel">
-                    <div class="stats-grid">
-                        ${generateStatistics()}
-                    </div>
-                </div>
-                
-                <div class="tab-panel" id="timeline-panel">
-                    <div class="timeline-container">
-                        ${generateTimeline()}
-                    </div>
-                </div>
-                
-                <div class="summary-actions">
-                    <button class="secondary-btn" onclick="exportSummaryData()">Export Data</button>
-                    <button class="secondary-btn" onclick="exportSummaryImage()">Export Chart</button>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    // Add event listeners
-    modal.querySelector('.modal-close').addEventListener('click', () => {
-        modal.remove();
-    });
-    
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            modal.remove();
-        }
-    });
-    
-    // Tab switching
-    modal.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const tabId = e.target.getAttribute('data-tab');
-            switchTab(modal, tabId);
-        });
-    });
-    
-    // Initialize chart after modal is added to DOM
-    setTimeout(() => {
-        initializeScoreChart();
-    }, 100);
-    
-    return modal;
-}
-
-function generateStatistics() {
-    const duration = currentSession ? 
-        Math.round((new Date() - new Date(currentSession.createdAt)) / 1000 / 60) : 0;
-    
-    const totalChanges = scoreHistory.length;
-    const highestScore = Math.max(...players.map(p => p.score));
-    const lowestScore = Math.min(...players.map(p => p.score));
-    
-    return `
-        <div class="stat-card">
-            <h4>Session Code</h4>
-            <p class="stat-value">${currentSession.code}</p>
-        </div>
-        <div class="stat-card">
-            <h4>Game Duration</h4>
-            <p class="stat-value">${duration} min</p>
-        </div>
-        <div class="stat-card">
-            <h4>Total Changes</h4>
-            <p class="stat-value">${totalChanges}</p>
-        </div>
-        <div class="stat-card">
-            <h4>Highest Score</h4>
-            <p class="stat-value">${highestScore}</p>
-        </div>
-        <div class="stat-card">
-            <h4>Lowest Score</h4>
-            <p class="stat-value">${lowestScore}</p>
-        </div>
-        ${players.map(player => `
-            <div class="player-stat-card">
-                <h4>${player.name}</h4>
-                <div class="player-stats">
-                    <span>Current: ${player.score}</span>
-                    <span>Changes: ${scoreHistory.filter(h => h.playerId === player.id).length}</span>
-                </div>
-            </div>
-        `).join('')}
-    `;
-}
-
-function generateTimeline() {
-    if (scoreHistory.length === 0) {
-        return '<p>No score changes yet.</p>';
-    }
-    
-    return scoreHistory.slice().reverse().map(entry => {
-        const time = new Date(entry.timestamp).toLocaleTimeString();
-        
-        if (entry.action === 'reset_all' || entry.action === 'new_round') {
-            return `
-                <div class="timeline-item">
-                    <div class="timeline-time">${time}</div>
-                    <div class="timeline-content">
-                        <strong>${entry.note}</strong>
-                    </div>
-                </div>
-            `;
-        }
-        
-        const changeClass = entry.delta > 0 ? 'positive' : 'negative';
-        const changeSymbol = entry.delta > 0 ? '+' : '';
-        
-        return `
-            <div class="timeline-item">
-                <div class="timeline-time">${time}</div>
-                <div class="timeline-content">
-                    <strong>${entry.playerName}</strong>
-                    <span class="score-change ${changeClass}">${changeSymbol}${entry.delta}</span>
-                    <span class="score-result">(${entry.oldScore} → ${entry.newScore})</span>
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-function switchTab(modal, tabId) {
-    // Update tab buttons
-    modal.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    modal.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
-    
-    // Update tab panels
-    modal.querySelectorAll('.tab-panel').forEach(panel => {
-        panel.classList.remove('active');
-    });
-    modal.querySelector(`#${tabId}-panel`).classList.add('active');
-}
-
-function initializeScoreChart() {
-    // This would initialize Chart.js if available
-    // For now, show a placeholder
-    const canvas = document.getElementById('scoreChart');
-    if (canvas) {
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#f0f0f0';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#333';
-        ctx.font = '16px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(`Score progression for session ${currentSession.code}`, canvas.width/2, canvas.height/2 - 10);
-        ctx.fillText('(Chart.js integration needed)', canvas.width/2, canvas.height/2 + 15);
-    }
-}
-
-// QR Code
-function showQRCode() {
-    if (!currentSession) return;
-    
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Share Session: ${currentSession.code}</h3>
-                <button class="modal-close">&times;</button>
-            </div>
-            <div class="modal-body">
-                <p><strong>Session Code:</strong> ${currentSession.code}</p>
-                <input type="text" class="share-url" value="${window.location.href}" readonly>
-                <div class="qr-placeholder">
-                    <h2>${currentSession.code}</h2>
-                    <p>Share this code with other players</p>
-                    <p>Session: ${currentSession.name}</p>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    modal.querySelector('.modal-close').addEventListener('click', () => {
-        modal.remove();
-    });
-    
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            modal.remove();
-        }
-    });
-    
-    document.body.appendChild(modal);
-}
-
-// Utility Functions
-function generateSessionCode() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let result = '';
-    for (let i = 0; i < 6; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    console.log('Generated session code:', result);
-    return result;
-}
-
-function showMessage(text, type = 'info') {
-    console.log('Showing message:', text, type);
-    
-    const message = document.createElement('div');
-    message.className = `message message-${type}`;
-    message.innerHTML = `
-        <span>${text}</span>
-        <button class="message-close">&times;</button>
-    `;
-    
-    message.querySelector('.message-close').addEventListener('click', () => {
-        message.remove();
-    });
-    
-    document.body.appendChild(message);
-    
-    // Auto-remove after 5 seconds
-    setTimeout(() => {
-        if (message.parentNode) {
-            message.remove();
-        }
-    }, 5000);
-}
-
-// Theme Management
-function initializeTheme() {
-    const savedTheme = localStorage.getItem('theme') || 'light';
-    document.documentElement.setAttribute('data-theme', savedTheme);
-    updateThemeIcon(savedTheme);
-}
-
-function toggleTheme() {
-    const currentTheme = document.documentElement.getAttribute('data-theme');
-    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-    
-    document.documentElement.setAttribute('data-theme', newTheme);
-    localStorage.setItem('theme', newTheme);
-    updateThemeIcon(newTheme);
-}
-
-function updateThemeIcon(theme) {
-    const icons = document.querySelectorAll('.theme-icon');
-    icons.forEach(icon => {
-        icon.textContent = theme === 'dark' ? '☀️' : '🌙';
-    });
-}
-
-// Connection Status
-function updateConnectionStatus(isOnline) {
-    console.log('Updating connection status:', isOnline);
-    
-    const statusDots = document.querySelectorAll('.status-dot');
-    const statusTexts = document.querySelectorAll('.connection-status span');
-    
-    statusDots.forEach(dot => {
-        dot.className = `status-dot ${isOnline ? 'online' : 'offline'}`;
-    });
-    
-    statusTexts.forEach(text => {
-        text.textContent = isOnline ? 'Online' : 'Offline';
-    });
-}
-
-// Player View Functions
-function refreshScores() {
-    if (firebaseReady && window.firebaseService && currentSession) {
-        window.firebaseService.getSession(currentSession.code)
-            .then((sessionData) => {
-                currentSession = sessionData;
-                updatePlayerView();
-                showMessage('Scores refreshed', 'success');
-            })
-            .catch(error => {
-                console.error('Error refreshing scores:', error);
-                showMessage('Could not refresh scores', 'error');
-            });
-    } else {
-        showMessage('Cannot refresh - offline mode', 'warning');
-    }
-}
-
-function leaveSession() {
-    if (confirm('Are you sure you want to leave this session?')) {
-        currentSession = null;
-        currentPlayer = null;
-        isScorekeeper = false;
-        players = [];
-        scoreHistory = [];
-        
-        showMessage('Left session', 'info');
-        showPage('landing');
-    }
-}
-
-// Export functions for summary
-function exportSummaryData() {
-    exportGameData();
-}
-
-function exportSummaryImage() {
-    const canvas = document.getElementById('scoreChart');
-    if (canvas) {
-        const link = document.createElement('a');
-        link.download = `gamescore-chart-${currentSession.code}.png`;
-        link.href = canvas.toDataURL();
-        link.click();
-        
-        showMessage('Chart exported successfully!', 'success');
-    }
+    showMessage(`Session Code: ${currentSession.code}`, 'info');
 }
 
