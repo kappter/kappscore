@@ -106,13 +106,16 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             
             const formData = new FormData(e.target);
-            const joinCode = formData.get('joinCode').toUpperCase();
-            const playerName = formData.get('playerName');
+            const joinCodeField = formData.get('joinCode') || formData.get('sessionCode') || formData.get('code');
+            const playerNameField = formData.get('playerName') || formData.get('name');
             
-            if (!joinCode || !playerName) {
+            if (!joinCodeField || !playerNameField) {
                 alert('Please enter both session code and your name');
                 return;
             }
+            
+            const joinCode = joinCodeField.toString().toUpperCase();
+            const playerName = playerNameField.toString();
             
             if (typeof database !== 'undefined' && database) {
                 const sessionRef = database.ref(`sessions/${joinCode}`);
