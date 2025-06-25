@@ -1,85 +1,133 @@
-// GameScore Pro - Interface Fix
+// GameScore Pro - Minimal Working Version
 console.log('GameScore Pro starting...');
 
-// Global variables
 let currentSession = null;
-let players = [];
-let isScorekeeper = false;
-let currentPlayer = null;
 let formSubmitted = false;
 
-// Initialize when page loads
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Page loaded, initializing...');
-    initializeApp();
-});
-
-function initializeApp() {
-    console.log('Initializing app...');
     
-    // Bind navigation events
+    // Create button
     const createBtn = document.getElementById('createSessionBtn');
     if (createBtn) {
         createBtn.addEventListener('click', function() {
             showPage('createSessionPage');
         });
-        console.log('Create button bound');
     }
     
+    // Join button  
     const joinBtn = document.getElementById('joinSessionBtn');
     if (joinBtn) {
         joinBtn.addEventListener('click', function() {
             showPage('joinSessionPage');
         });
-        console.log('Join button bound');
     }
     
-    // Bind player count controls
+    // Player count controls
     const increaseBtn = document.getElementById('increasePlayer');
     if (increaseBtn) {
         increaseBtn.addEventListener('click', function() {
-            changePlayerCount(1);
+            const input = document.getElementById('numPlayers');
+            if (input) {
+                const current = parseInt(input.value) || 2;
+                input.value = Math.min(12, current + 1);
+            }
         });
-        console.log('Increase player button bound');
     }
     
     const decreaseBtn = document.getElementById('decreasePlayer');
     if (decreaseBtn) {
         decreaseBtn.addEventListener('click', function() {
-            changePlayerCount(-1);
+            const input = document.getElementById('numPlayers');
+            if (input) {
+                const current = parseInt(input.value) || 2;
+                input.value = Math.max(1, current - 1);
+            }
         });
-        console.log('Decrease player button bound');
     }
     
-    // Bind form submissions
+    // Create form
     const createForm = document.getElementById('createSessionForm');
     if (createForm) {
         createForm.addEventListener('submit', function(e) {
             e.preventDefault();
-            if (formSubmitted) {
-                console.log('Form already submitted, ignoring');
-                return;
-            }
+            if (formSubmitted) return;
             formSubmitted = true;
-            console.log('Create session form submitted');
-            handleCreateSession(e);
+            
+            // Generate session code
+            const sessionCode = generateSessionCode();
+            console.log('Session created:', sessionCode);
+            
+            // Save to Firebase
+            const sessionData = {
+                code: sessionCode,
+                name: new FormData(e.target).get('sessionName') || 'Game Session',
+                playerCount: parseInt(document.getElementById('numPlayers').value) || 2,
+                startingScore: parseFloat(document.getElementById('startingScore').value) || 0,
+                createdAt: new Date().toISOString()
+            };
+            
+            if (typeof database !== 'undefined' && database) {
+                const sessionRef = database.ref(`sessions/${sessionCode}`);
+                const players = {};
+                for (let i = 1; i <= sessionData.playerCount; i++) {
+                    players[`player${i}`] = {
+                        name: `Player ${i}`,
+                        score: sessionData.startingScore
+                    };
+                }
+                sessionRef.set({
+                    metadata: sessionData,
+                    players: players,
+                    lastUpdated: new Date().toISOString()
+                });
+            }
+            
+            // Show success message
+            alert(`🎉 SESSION CREATED!\n\nSession Code: ${sessionCode}\n\nShare this code with other players!\n\nThey can join at: https://kappter.github.io/kappscore/`);
+            
+            // Reset form
+            formSubmitted = false;
+            e.target.reset();
+            document.getElementById('numPlayers').value = 2;
         });
-        console.log('Create form bound');
     }
     
+    // Join form
     const joinForm = document.getElementById('joinSessionForm');
     if (joinForm) {
         joinForm.addEventListener('submit', function(e) {
             e.preventDefault();
-            console.log('Join session form submitted');
-            handleJoinSession(e);
+            
+            const formData = new FormData(e.target);
+            const joinCode = formData.get('joinCode').toUpperCase();
+            const playerName = formData.get('playerName');
+            
+            if (!joinCode || !playerName) {
+                alert('Please enter both session code and your name');
+                return;
+            }
+            
+            if (typeof database !== 'undefined' && database) {
+                const sessionRef = database.ref(`sessions/${joinCode}`);
+                sessionRef.once('value').then(snapshot => {
+                    if (snapshot.exists()) {
+                        alert(`✅ JOINED SESSION!\n\nYou joined as: ${playerName}\nSession: ${joinCode}\n\nThe scorekeeper will manage scores for everyone.`);
+                        e.target.reset();
+                    } else {
+                        alert('❌ Session not found. Check the code and try again.');
+                    }
+                }).catch(() => {
+                    alert('❌ Failed to join session. Try again.');
+                });
+            } else {
+                alert('❌ Cannot join - Firebase not available');
+            }
         });
-        console.log('Join form bound');
     }
     
-    // Bind back buttons
-    const backButtons = document.querySelectorAll('[id*="backTo"]');
-    backButtons.forEach(btn => {
+    // Back buttons
+    document.querySelectorAll('[id*="backTo"]').forEach(btn => {
         btn.addEventListener('click', function() {
             formSubmitted = false;
             showPage('landingPage');
@@ -87,20 +135,9 @@ function initializeApp() {
     });
     
     console.log('App initialized successfully!');
-}
-
-function changePlayerCount(delta) {
-    const input = document.getElementById('numPlayers');
-    if (input) {
-        const current = parseInt(input.value) || 2;
-        const newValue = Math.max(1, Math.min(12, current + delta));
-        input.value = newValue;
-        console.log('Player count changed to:', newValue);
-    }
-}
+});
 
 function showPage(pageId) {
-    console.log('Showing page:', pageId);
     document.querySelectorAll('.page').forEach(page => {
         page.classList.remove('active');
     });
@@ -108,88 +145,6 @@ function showPage(pageId) {
     const targetPage = document.getElementById(pageId);
     if (targetPage) {
         targetPage.classList.add('active');
-        console.log('Page shown:', pageId);
-    } else {
-        console.error('Page not found:', pageId);
-    }
-}
-
-function handleCreateSession(e) {
-    console.log('Creating session...');
-    
-    // Disable the submit button
-    const submitBtn = e.target.querySelector('button[type="submit"]');
-    if (submitBtn) {
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Creating...';
-    }
-    
-    // Get form data
-    const formData = new FormData(e.target);
-    const sessionName = formData.get('sessionName') || 'Game Session';
-    const playerCount = parseInt(document.getElementById('numPlayers').value) || 2;
-    const startingScore = parseFloat(document.getElementById('startingScore').value) || 0;
-    
-    // Generate session code
-    const sessionCode = generateSessionCode();
-    console.log('Generated session code:', sessionCode);
-    
-    // Create session
-    currentSession = {
-        code: sessionCode,
-        name: sessionName,
-        playerCount: playerCount,
-        startingScore: startingScore,
-        createdAt: new Date().toISOString()
-    };
-    
-    // Initialize players
-    players = [];
-    for (let i = 1; i <= playerCount; i++) {
-        players.push({
-            id: `player${i}`,
-            name: `Player ${i}`,
-            score: startingScore
-        });
-    }
-    
-    isScorekeeper = true;
-    
-    // Save to Firebase if available
-    if (typeof database !== 'undefined' && database) {
-        saveSessionToFirebase();
-    }
-    
-    console.log('Session created, showing interface...');
-    
-    // Show scorekeeper interface immediately
-    setTimeout(() => {
-        showScorekeeperInterface();
-        
-        // Show success message after interface is shown
-        setTimeout(() => {
-            alert(`🎉 Session Created!\n\nSession Code: ${sessionCode}\n\nShare this code with other players to join your game!`);
-        }, 100);
-    }, 100);
-}
-
-function handleJoinSession(e) {
-    console.log('Joining session...');
-    
-    const formData = new FormData(e.target);
-    const joinCode = formData.get('joinCode').toUpperCase();
-    const playerName = formData.get('playerName');
-    
-    if (!joinCode || !playerName) {
-        alert('Please enter both session code and your name');
-        return;
-    }
-    
-    // Try to join session
-    if (typeof database !== 'undefined' && database) {
-        joinSessionFromFirebase(joinCode, playerName);
-    } else {
-        alert('Cannot join session - Firebase not available');
     }
 }
 
@@ -202,320 +157,5 @@ function generateSessionCode() {
     return result;
 }
 
-function showScorekeeperInterface() {
-    console.log('Showing scorekeeper interface...');
-    
-    // Hide all pages first
-    document.querySelectorAll('.page').forEach(page => {
-        page.classList.remove('active');
-    });
-    
-    const container = document.querySelector('.container');
-    if (!container) {
-        console.error('Container not found');
-        return;
-    }
-    
-    // Create the scorekeeper interface
-    const interfaceHTML = `
-        <div class="scorekeeper-interface">
-            <header>
-                <div class="header-content">
-                    <div class="header-left">
-                        <h1>GameScore Pro</h1>
-                        <p><strong>Session: ${currentSession.code}</strong></p>
-                        <p>${currentSession.name} (${players.length} players)</p>
-                    </div>
-                    <div class="header-right">
-                        <div class="connection-status">
-                            <span class="status-dot online"></span>
-                            <span class="status-text">Online</span>
-                        </div>
-                        <button onclick="showSessionCode()" class="secondary-btn">📱 Show Code</button>
-                        <button onclick="goHome()" class="secondary-btn">← Home</button>
-                        <button onclick="endSession()" class="danger-btn">🏁 End</button>
-                    </div>
-                </div>
-            </header>
-            
-            <div class="session-info">
-                <h2>🎮 Scorekeeper Mode</h2>
-                <p>You are managing scores for ${players.length} players</p>
-            </div>
-            
-            <div class="players-grid" data-player-count="${players.length}">
-                ${generatePlayerTiles()}
-            </div>
-            
-            <div class="game-controls">
-                <button onclick="resetAllScores()" class="secondary-btn">🔄 Reset All Scores</button>
-                <button onclick="showSessionCode()" class="primary-btn">📱 Share Session Code</button>
-            </div>
-        </div>
-    `;
-    
-    container.innerHTML = interfaceHTML;
-    console.log('Scorekeeper interface created and displayed');
-}
-
-function generatePlayerTiles() {
-    return players.map(player => `
-        <div class="player-tile" data-player-id="${player.id}">
-            <div class="player-header">
-                <h3 class="player-name" contenteditable="true" onblur="updatePlayerName('${player.id}', this.textContent)">${player.name}</h3>
-            </div>
-            
-            <div class="player-score">
-                <span class="score-value" id="score-${player.id}">${player.score}</span>
-            </div>
-            
-            <div class="custom-amount-section">
-                <label>Custom Amount:</label>
-                <input type="number" class="custom-amount" id="amount-${player.id}" value="1" step="0.1">
-                <div class="preset-buttons">
-                    <button onclick="changeScore('${player.id}', 1)" class="preset-btn">+1</button>
-                    <button onclick="changeScore('${player.id}', 5)" class="preset-btn">+5</button>
-                    <button onclick="changeScore('${player.id}', 10)" class="preset-btn">+10</button>
-                    <button onclick="changeScore('${player.id}', -1)" class="preset-btn">-1</button>
-                </div>
-            </div>
-            
-            <div class="score-controls">
-                <button class="score-btn decrease-btn" onclick="changeScoreByAmount('${player.id}', -1)">-</button>
-                <button class="score-btn increase-btn" onclick="changeScoreByAmount('${player.id}', 1)">+</button>
-            </div>
-        </div>
-    `).join('');
-}
-
-function changeScore(playerId, amount) {
-    const player = players.find(p => p.id === playerId);
-    if (player) {
-        player.score += amount;
-        updateScoreDisplay(playerId);
-        console.log(`${player.name} score changed by ${amount} to ${player.score}`);
-        
-        // Update Firebase
-        if (typeof database !== 'undefined' && database && currentSession) {
-            updatePlayerInFirebase(playerId, player);
-        }
-    }
-}
-
-function changeScoreByAmount(playerId, multiplier) {
-    const amountInput = document.getElementById(`amount-${playerId}`);
-    const amount = parseFloat(amountInput.value) || 1;
-    changeScore(playerId, amount * multiplier);
-}
-
-function updateScoreDisplay(playerId) {
-    const scoreElement = document.getElementById(`score-${playerId}`);
-    const player = players.find(p => p.id === playerId);
-    if (scoreElement && player) {
-        scoreElement.textContent = player.score;
-    }
-}
-
-function updatePlayerName(playerId, newName) {
-    const player = players.find(p => p.id === playerId);
-    if (player && newName.trim()) {
-        player.name = newName.trim();
-        console.log(`Player ${playerId} renamed to ${player.name}`);
-        
-        // Update Firebase
-        if (typeof database !== 'undefined' && database && currentSession) {
-            updatePlayerInFirebase(playerId, player);
-        }
-    }
-}
-
-function showSessionCode() {
-    const message = `🎮 Session Code: ${currentSession.code}\n\n📱 Share this code with other players so they can join your game!\n\n🌐 They can visit: https://kappter.github.io/kappscore/\nThen click "Join Session" and enter this code.`;
-    alert(message);
-}
-
-function resetAllScores() {
-    if (confirm('Reset all scores to starting score?')) {
-        players.forEach(player => {
-            player.score = currentSession.startingScore;
-            updateScoreDisplay(player.id);
-        });
-        console.log('All scores reset');
-        
-        // Update Firebase
-        if (typeof database !== 'undefined' && database && currentSession) {
-            saveSessionToFirebase();
-        }
-    }
-}
-
-function endSession() {
-    if (confirm('End this session and return to home?')) {
-        goHome();
-    }
-}
-
-function goHome() {
-    console.log('Going home...');
-    formSubmitted = false;
-    currentSession = null;
-    players = [];
-    isScorekeeper = false;
-    
-    // Show the landing page
-    showPage('landingPage');
-}
-
-function saveSessionToFirebase() {
-    if (typeof database !== 'undefined' && database && currentSession) {
-        try {
-            const sessionRef = database.ref(`sessions/${currentSession.code}`);
-            sessionRef.set({
-                metadata: currentSession,
-                players: players.reduce((obj, player) => {
-                    obj[player.id] = player;
-                    return obj;
-                }, {}),
-                lastUpdated: new Date().toISOString()
-            });
-            console.log('Session saved to Firebase');
-        } catch (error) {
-            console.error('Error saving to Firebase:', error);
-        }
-    }
-}
-
-function updatePlayerInFirebase(playerId, player) {
-    if (typeof database !== 'undefined' && database && currentSession) {
-        try {
-            const playerRef = database.ref(`sessions/${currentSession.code}/players/${playerId}`);
-            playerRef.set(player);
-            console.log(`Player ${playerId} updated in Firebase`);
-        } catch (error) {
-            console.error('Error updating player in Firebase:', error);
-        }
-    }
-}
-
-function joinSessionFromFirebase(joinCode, playerName) {
-    const sessionRef = database.ref(`sessions/${joinCode}`);
-    sessionRef.once('value').then(snapshot => {
-        if (snapshot.exists()) {
-            const sessionData = snapshot.val();
-            currentSession = sessionData.metadata;
-            players = Object.values(sessionData.players || {});
-            
-            // Find or assign player
-            let assignedPlayer = players.find(p => p.name === playerName);
-            if (!assignedPlayer) {
-                assignedPlayer = players.find(p => p.name.startsWith('Player '));
-                if (assignedPlayer) {
-                    assignedPlayer.name = playerName;
-                    updatePlayerInFirebase(assignedPlayer.id, assignedPlayer);
-                }
-            }
-            
-            if (assignedPlayer) {
-                currentPlayer = assignedPlayer.id;
-                isScorekeeper = false;
-                showPlayerInterface();
-                alert(`Joined session as ${playerName}!`);
-            } else {
-                alert('Session is full');
-            }
-        } else {
-            alert('Session not found');
-        }
-    }).catch(error => {
-        console.error('Error joining session:', error);
-        alert('Failed to join session');
-    });
-}
-
-function showPlayerInterface() {
-    // Hide all pages
-    document.querySelectorAll('.page').forEach(page => {
-        page.classList.remove('active');
-    });
-    
-    const container = document.querySelector('.container');
-    container.innerHTML = `
-        <div class="player-interface">
-            <header>
-                <div class="header-content">
-                    <div class="header-left">
-                        <h1>GameScore Pro</h1>
-                        <p><strong>Session: ${currentSession.code}</strong></p>
-                        <p>${currentSession.name}</p>
-                    </div>
-                    <div class="header-right">
-                        <div class="connection-status">
-                            <span class="status-dot online"></span>
-                            <span class="status-text">Online</span>
-                        </div>
-                        <button onclick="goHome()" class="danger-btn">🚪 Leave</button>
-                    </div>
-                </div>
-            </header>
-            
-            <div class="player-view-info">
-                <div class="view-mode-indicator">
-                    <span class="indicator-icon">👁️</span>
-                    <span>Player View - Scores update automatically</span>
-                </div>
-            </div>
-            
-            <div class="players-grid" data-player-count="${players.length}">
-                ${generatePlayerViewTiles()}
-            </div>
-            
-            <div class="last-updated">
-                <small>Last updated: <span id="lastUpdated">${new Date().toLocaleTimeString()}</span></small>
-            </div>
-        </div>
-    `;
-    
-    // Listen for real-time updates
-    if (typeof database !== 'undefined' && database && currentSession) {
-        const sessionRef = database.ref(`sessions/${currentSession.code}/players`);
-        sessionRef.on('value', (snapshot) => {
-            if (snapshot.exists()) {
-                const updatedPlayers = Object.values(snapshot.val());
-                players = updatedPlayers;
-                
-                // Update the display
-                const playersGrid = document.querySelector('.players-grid');
-                if (playersGrid) {
-                    playersGrid.innerHTML = generatePlayerViewTiles();
-                }
-                
-                // Update timestamp
-                const lastUpdated = document.getElementById('lastUpdated');
-                if (lastUpdated) {
-                    lastUpdated.textContent = new Date().toLocaleTimeString();
-                }
-            }
-        });
-    }
-}
-
-function generatePlayerViewTiles() {
-    return players.map(player => {
-        const isCurrentPlayer = player.id === currentPlayer;
-        return `
-            <div class="player-tile ${isCurrentPlayer ? 'current-player' : ''}" data-player-id="${player.id}">
-                <div class="player-header">
-                    <h3 class="player-name">${player.name}</h3>
-                    ${isCurrentPlayer ? '<span class="current-player-badge">You</span>' : ''}
-                </div>
-                
-                <div class="player-score">
-                    <span class="score-value">${player.score}</span>
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-console.log('GameScore Pro script loaded');
+console.log('GameScore Pro loaded - MINIMAL VERSION');
 
