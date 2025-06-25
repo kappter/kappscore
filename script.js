@@ -1,4 +1,4 @@
-// GameScore Pro - Fixed Version
+// GameScore Pro - Interface Fix
 console.log('GameScore Pro starting...');
 
 // Global variables
@@ -81,7 +81,7 @@ function initializeApp() {
     const backButtons = document.querySelectorAll('[id*="backTo"]');
     backButtons.forEach(btn => {
         btn.addEventListener('click', function() {
-            formSubmitted = false; // Reset form submission flag
+            formSubmitted = false;
             showPage('landingPage');
         });
     });
@@ -117,7 +117,7 @@ function showPage(pageId) {
 function handleCreateSession(e) {
     console.log('Creating session...');
     
-    // Disable the submit button to prevent multiple submissions
+    // Disable the submit button
     const submitBtn = e.target.querySelector('button[type="submit"]');
     if (submitBtn) {
         submitBtn.disabled = true;
@@ -160,11 +160,17 @@ function handleCreateSession(e) {
         saveSessionToFirebase();
     }
     
-    // Show success message with session code
-    alert(`🎉 Session Created!\n\nSession Code: ${sessionCode}\n\nShare this code with other players.\n\nClick OK to start scoring!`);
+    console.log('Session created, showing interface...');
     
-    // Show scorekeeper interface
-    showScorekeeperInterface();
+    // Show scorekeeper interface immediately
+    setTimeout(() => {
+        showScorekeeperInterface();
+        
+        // Show success message after interface is shown
+        setTimeout(() => {
+            alert(`🎉 Session Created!\n\nSession Code: ${sessionCode}\n\nShare this code with other players to join your game!`);
+        }, 100);
+    }, 100);
 }
 
 function handleJoinSession(e) {
@@ -199,54 +205,57 @@ function generateSessionCode() {
 function showScorekeeperInterface() {
     console.log('Showing scorekeeper interface...');
     
+    // Hide all pages first
+    document.querySelectorAll('.page').forEach(page => {
+        page.classList.remove('active');
+    });
+    
     const container = document.querySelector('.container');
     if (!container) {
         console.error('Container not found');
         return;
     }
     
-    // Clear any existing content
-    container.innerHTML = '';
-    
     // Create the scorekeeper interface
     const interfaceHTML = `
-        <header>
-            <div class="header-content">
-                <div class="header-left">
-                    <h1>GameScore Pro</h1>
-                    <p><strong>Session: ${currentSession.code}</strong></p>
-                    <p>${currentSession.name}</p>
-                </div>
-                <div class="header-right">
-                    <div class="connection-status">
-                        <span class="status-dot online"></span>
-                        <span class="status-text">Online</span>
+        <div class="scorekeeper-interface">
+            <header>
+                <div class="header-content">
+                    <div class="header-left">
+                        <h1>GameScore Pro</h1>
+                        <p><strong>Session: ${currentSession.code}</strong></p>
+                        <p>${currentSession.name} (${players.length} players)</p>
                     </div>
-                    <button onclick="showSessionCode()" class="secondary-btn">📱 Show Code</button>
-                    <button onclick="endSession()" class="danger-btn">🏁 End Session</button>
+                    <div class="header-right">
+                        <div class="connection-status">
+                            <span class="status-dot online"></span>
+                            <span class="status-text">Online</span>
+                        </div>
+                        <button onclick="showSessionCode()" class="secondary-btn">📱 Show Code</button>
+                        <button onclick="goHome()" class="secondary-btn">← Home</button>
+                        <button onclick="endSession()" class="danger-btn">🏁 End</button>
+                    </div>
                 </div>
+            </header>
+            
+            <div class="session-info">
+                <h2>🎮 Scorekeeper Mode</h2>
+                <p>You are managing scores for ${players.length} players</p>
             </div>
-        </header>
-        
-        <div class="session-info">
-            <h2>Scorekeeper Mode</h2>
-            <p>Managing ${players.length} players</p>
-        </div>
-        
-        <div class="players-grid" data-player-count="${players.length}">
-            ${generatePlayerTiles()}
-        </div>
-        
-        <div class="game-controls">
-            <button onclick="resetAllScores()" class="secondary-btn">🔄 Reset All Scores</button>
-            <button onclick="goHome()" class="secondary-btn">← Back to Home</button>
+            
+            <div class="players-grid" data-player-count="${players.length}">
+                ${generatePlayerTiles()}
+            </div>
+            
+            <div class="game-controls">
+                <button onclick="resetAllScores()" class="secondary-btn">🔄 Reset All Scores</button>
+                <button onclick="showSessionCode()" class="primary-btn">📱 Share Session Code</button>
+            </div>
         </div>
     `;
     
     container.innerHTML = interfaceHTML;
-    console.log('Scorekeeper interface created');
-    
-    bindScoreControls();
+    console.log('Scorekeeper interface created and displayed');
 }
 
 function generatePlayerTiles() {
@@ -277,10 +286,6 @@ function generatePlayerTiles() {
             </div>
         </div>
     `).join('');
-}
-
-function bindScoreControls() {
-    console.log('Score controls bound');
 }
 
 function changeScore(playerId, amount) {
@@ -325,7 +330,8 @@ function updatePlayerName(playerId, newName) {
 }
 
 function showSessionCode() {
-    alert(`Session Code: ${currentSession.code}\n\nShare this code with other players so they can join your game!`);
+    const message = `🎮 Session Code: ${currentSession.code}\n\n📱 Share this code with other players so they can join your game!\n\n🌐 They can visit: https://kappter.github.io/kappscore/\nThen click "Join Session" and enter this code.`;
+    alert(message);
 }
 
 function resetAllScores() {
@@ -350,13 +356,14 @@ function endSession() {
 }
 
 function goHome() {
-    formSubmitted = false; // Reset form submission flag
+    console.log('Going home...');
+    formSubmitted = false;
     currentSession = null;
     players = [];
     isScorekeeper = false;
     
-    // Restore original container content
-    location.reload(); // Simple way to reset everything
+    // Show the landing page
+    showPage('landingPage');
 }
 
 function saveSessionToFirebase() {
@@ -426,38 +433,45 @@ function joinSessionFromFirebase(joinCode, playerName) {
 }
 
 function showPlayerInterface() {
+    // Hide all pages
+    document.querySelectorAll('.page').forEach(page => {
+        page.classList.remove('active');
+    });
+    
     const container = document.querySelector('.container');
     container.innerHTML = `
-        <header>
-            <div class="header-content">
-                <div class="header-left">
-                    <h1>GameScore Pro</h1>
-                    <p><strong>Session: ${currentSession.code}</strong></p>
-                    <p>${currentSession.name}</p>
-                </div>
-                <div class="header-right">
-                    <div class="connection-status">
-                        <span class="status-dot online"></span>
-                        <span class="status-text">Online</span>
+        <div class="player-interface">
+            <header>
+                <div class="header-content">
+                    <div class="header-left">
+                        <h1>GameScore Pro</h1>
+                        <p><strong>Session: ${currentSession.code}</strong></p>
+                        <p>${currentSession.name}</p>
                     </div>
-                    <button onclick="goHome()" class="danger-btn">🚪 Leave Session</button>
+                    <div class="header-right">
+                        <div class="connection-status">
+                            <span class="status-dot online"></span>
+                            <span class="status-text">Online</span>
+                        </div>
+                        <button onclick="goHome()" class="danger-btn">🚪 Leave</button>
+                    </div>
+                </div>
+            </header>
+            
+            <div class="player-view-info">
+                <div class="view-mode-indicator">
+                    <span class="indicator-icon">👁️</span>
+                    <span>Player View - Scores update automatically</span>
                 </div>
             </div>
-        </header>
-        
-        <div class="player-view-info">
-            <div class="view-mode-indicator">
-                <span class="indicator-icon">👁️</span>
-                <span>Player View - Scores update automatically</span>
+            
+            <div class="players-grid" data-player-count="${players.length}">
+                ${generatePlayerViewTiles()}
             </div>
-        </div>
-        
-        <div class="players-grid" data-player-count="${players.length}">
-            ${generatePlayerViewTiles()}
-        </div>
-        
-        <div class="last-updated">
-            <small>Last updated: <span id="lastUpdated">${new Date().toLocaleTimeString()}</span></small>
+            
+            <div class="last-updated">
+                <small>Last updated: <span id="lastUpdated">${new Date().toLocaleTimeString()}</span></small>
+            </div>
         </div>
     `;
     
