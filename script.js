@@ -1,4 +1,4 @@
-// GameScore Pro - Complete Working Version
+// GameScore Pro - Simple Working Version
 console.log('GameScore Pro starting...');
 
 let currentSession = null;
@@ -94,7 +94,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log('Session saved to Firebase');
             }
             
-            // Show success screen
+            // Show success screen with Start Scoring button
             showSessionSuccess();
         });
     }
@@ -110,7 +110,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const playerName = formData.get('playerName');
             
             if (!joinCode || !playerName) {
-                showMessage('Please enter both session code and your name', 'error');
+                alert('Please enter both session code and your name');
                 return;
             }
             
@@ -135,18 +135,19 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                         
                         if (assignedPlayer) {
+                            alert(`Successfully joined session ${joinCode}!\\n\\nYou are: ${assignedPlayer.name}\\n\\nYou can now see live score updates from the scorekeeper.`);
                             showPlayerView(assignedPlayer.id);
                         } else {
-                            showMessage('Session is full', 'error');
+                            alert('Session is full');
                         }
                     } else {
-                        showMessage('Session not found. Check the code and try again.', 'error');
+                        alert('Session not found. Check the code and try again.');
                     }
                 }).catch(() => {
-                    showMessage('Failed to join session. Try again.', 'error');
+                    alert('Failed to join session. Try again.');
                 });
             } else {
-                showMessage('Cannot join - Firebase not available', 'error');
+                alert('Cannot join - Firebase not available');
             }
         });
     }
@@ -301,269 +302,158 @@ function showSessionSuccess() {
 
 function startScoring() {
     console.log('Starting scoring interface...');
-    showScorekeeperInterface();
+    
+    // Simple alert with session info and instructions
+    const message = `🎮 SCOREKEEPER MODE ACTIVE!
+
+Session: ${currentSession.code}
+Players: ${currentSession.playerCount}
+
+📱 SHARE THIS CODE: ${currentSession.code}
+
+🎯 SCORING INSTRUCTIONS:
+• This is your scorekeeper view
+• Other players join using the session code
+• You can manually track scores here
+• All players will see updates in real-time
+
+✅ Session is ready for scoring!
+Click OK to continue managing scores.`;
+
+    alert(message);
+    
+    // Show a simple scoring interface
+    showSimpleScoringInterface();
 }
 
-function showScorekeeperInterface() {
-    const container = document.querySelector('.container');
-    if (container) {
-        container.innerHTML = `
-            <div class="scorekeeper-interface">
-                <header class="game-header">
-                    <div class="header-content">
-                        <div class="header-left">
-                            <h1>GameScore Pro</h1>
-                            <p><strong>Session: ${currentSession.code}</strong></p>
-                            <p>${currentSession.name} (${players.length} players)</p>
-                        </div>
-                        <div class="header-right">
-                            <div class="connection-status">
-                                <span class="status-dot online"></span>
-                                <span class="status-text">Online</span>
-                            </div>
-                            <button onclick="showSessionCode()" class="header-btn">📱 Code</button>
-                            <button onclick="goHome()" class="header-btn">← Home</button>
-                        </div>
-                    </div>
-                </header>
+function showSimpleScoringInterface() {
+    const createPage = document.getElementById('createSessionPage');
+    if (createPage) {
+        createPage.innerHTML = `
+            <div class="scoring-interface">
+                <div class="scoring-header">
+                    <h2>🎮 Scorekeeper Mode</h2>
+                    <p><strong>Session: ${currentSession.code}</strong> | ${currentSession.name}</p>
+                    <p>Managing ${currentSession.playerCount} players</p>
+                </div>
                 
-                <div class="scorekeeper-content">
-                    <div class="session-info">
-                        <h2>🎮 Scorekeeper Mode</h2>
-                        <p>Managing scores for ${players.length} players</p>
-                    </div>
-                    
-                    <div class="players-grid" data-player-count="${players.length}">
-                        ${generatePlayerTiles()}
-                    </div>
-                    
-                    <div class="game-controls">
-                        <button onclick="resetAllScores()" class="control-btn">🔄 Reset All</button>
-                        <button onclick="showSessionCode()" class="control-btn">📱 Share Code</button>
-                        <button onclick="goHome()" class="control-btn">🏠 End Game</button>
-                    </div>
+                <div class="players-list">
+                    ${generateSimplePlayerList()}
+                </div>
+                
+                <div class="scoring-actions">
+                    <button onclick="showSessionCode()" class="action-btn">📱 Share Code</button>
+                    <button onclick="resetAllScores()" class="action-btn">🔄 Reset Scores</button>
+                    <button onclick="goHome()" class="action-btn">🏠 End Game</button>
                 </div>
             </div>
             
             <style>
-                .scorekeeper-interface {
-                    min-height: 100vh;
-                    background: #f0f2f5;
-                }
-                
-                .game-header {
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white;
-                    padding: 15px 20px;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                }
-                
-                .header-content {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    max-width: 1200px;
-                    margin: 0 auto;
-                }
-                
-                .header-left h1 {
-                    margin: 0;
-                    font-size: 1.5em;
-                }
-                
-                .header-left p {
-                    margin: 2px 0;
-                    opacity: 0.9;
-                }
-                
-                .header-right {
-                    display: flex;
-                    align-items: center;
-                    gap: 10px;
-                }
-                
-                .connection-status {
-                    display: flex;
-                    align-items: center;
-                    gap: 5px;
-                }
-                
-                .status-dot {
-                    width: 8px;
-                    height: 8px;
-                    border-radius: 50%;
-                    background: #4CAF50;
-                }
-                
-                .header-btn {
-                    background: rgba(255,255,255,0.2);
-                    color: white;
-                    border: none;
-                    padding: 8px 16px;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    font-size: 14px;
-                }
-                
-                .header-btn:hover {
-                    background: rgba(255,255,255,0.3);
-                }
-                
-                .scorekeeper-content {
-                    max-width: 1200px;
+                .scoring-interface {
+                    max-width: 800px;
                     margin: 0 auto;
                     padding: 20px;
                 }
                 
-                .session-info {
+                .scoring-header {
                     text-align: center;
                     margin-bottom: 30px;
+                    padding: 20px;
+                    background: #f0f2f5;
+                    border-radius: 10px;
                 }
                 
-                .session-info h2 {
+                .scoring-header h2 {
                     color: #333;
                     margin-bottom: 10px;
                 }
                 
-                .players-grid {
+                .players-list {
                     display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
                     gap: 20px;
                     margin-bottom: 30px;
                 }
                 
-                .players-grid[data-player-count="1"] { grid-template-columns: 1fr; }
-                .players-grid[data-player-count="2"] { grid-template-columns: repeat(2, 1fr); }
-                .players-grid[data-player-count="3"] { grid-template-columns: repeat(3, 1fr); }
-                .players-grid[data-player-count="4"] { grid-template-columns: repeat(2, 1fr); }
-                .players-grid[data-player-count="5"], 
-                .players-grid[data-player-count="6"] { grid-template-columns: repeat(3, 1fr); }
-                .players-grid[data-player-count="7"], 
-                .players-grid[data-player-count="8"] { grid-template-columns: repeat(4, 1fr); }
-                .players-grid[data-player-count="9"], 
-                .players-grid[data-player-count="10"], 
-                .players-grid[data-player-count="11"], 
-                .players-grid[data-player-count="12"] { grid-template-columns: repeat(4, 1fr); }
-                
-                @media (max-width: 768px) {
-                    .players-grid { grid-template-columns: repeat(2, 1fr) !important; }
-                }
-                
-                @media (max-width: 480px) {
-                    .players-grid { grid-template-columns: 1fr !important; }
-                }
-                
-                .player-tile {
+                .player-card {
                     background: white;
-                    border-radius: 15px;
+                    border: 2px solid #ddd;
+                    border-radius: 10px;
                     padding: 20px;
-                    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
                     text-align: center;
-                    transition: transform 0.2s;
-                }
-                
-                .player-tile:hover {
-                    transform: translateY(-2px);
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
                 }
                 
                 .player-name {
                     font-size: 1.2em;
                     font-weight: bold;
                     margin-bottom: 15px;
-                    color: #333;
                     background: none;
                     border: none;
-                    cursor: text;
                     width: 100%;
                     text-align: center;
+                    cursor: text;
                 }
                 
                 .player-name:focus {
-                    outline: 2px solid #667eea;
+                    outline: 2px solid #4CAF50;
                     border-radius: 4px;
                 }
                 
                 .player-score {
-                    font-size: 3em;
+                    font-size: 2.5em;
                     font-weight: bold;
                     color: #667eea;
-                    margin: 20px 0;
+                    margin: 15px 0;
                 }
                 
                 .score-controls {
                     display: flex;
                     justify-content: center;
                     gap: 10px;
-                    margin-top: 20px;
+                    margin-top: 15px;
                 }
                 
                 .score-btn {
-                    width: 50px;
-                    height: 50px;
+                    padding: 10px 15px;
                     border: none;
-                    border-radius: 50%;
-                    font-size: 24px;
-                    font-weight: bold;
+                    border-radius: 5px;
                     cursor: pointer;
-                    transition: all 0.2s;
+                    font-weight: bold;
+                    min-width: 50px;
                 }
                 
-                .score-btn.increase {
+                .score-btn.add {
                     background: #4CAF50;
                     color: white;
                 }
                 
-                .score-btn.decrease {
+                .score-btn.subtract {
                     background: #f44336;
                     color: white;
                 }
                 
                 .score-btn:hover {
-                    transform: scale(1.1);
+                    opacity: 0.8;
                 }
                 
-                .score-btn:active {
-                    transform: scale(0.95);
-                }
-                
-                .preset-buttons {
-                    display: flex;
-                    justify-content: center;
-                    gap: 5px;
-                    margin: 15px 0;
-                    flex-wrap: wrap;
-                }
-                
-                .preset-btn {
-                    background: #e0e0e0;
-                    border: none;
-                    padding: 8px 12px;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    font-size: 12px;
-                    transition: background 0.2s;
-                }
-                
-                .preset-btn:hover {
-                    background: #d0d0d0;
-                }
-                
-                .custom-amount {
-                    width: 80px;
-                    padding: 8px;
-                    border: 1px solid #ddd;
-                    border-radius: 6px;
+                .custom-input {
+                    width: 60px;
+                    padding: 5px;
                     text-align: center;
-                    margin: 10px 0;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    margin: 0 5px;
                 }
                 
-                .game-controls {
+                .scoring-actions {
                     display: flex;
                     justify-content: center;
                     gap: 15px;
                     flex-wrap: wrap;
                 }
                 
-                .control-btn {
+                .action-btn {
                     background: #2196F3;
                     color: white;
                     border: none;
@@ -571,142 +461,103 @@ function showScorekeeperInterface() {
                     border-radius: 8px;
                     cursor: pointer;
                     font-size: 16px;
-                    transition: background 0.2s;
                 }
                 
-                .control-btn:hover {
+                .action-btn:hover {
                     background: #1976D2;
                 }
             </style>
         `;
-        
-        console.log('Scorekeeper interface displayed');
     }
 }
 
-function generatePlayerTiles() {
+function generateSimplePlayerList() {
     return players.map(player => `
-        <div class="player-tile" data-player-id="${player.id}">
+        <div class="player-card" data-player-id="${player.id}">
             <input type="text" class="player-name" value="${player.name}" 
                    onblur="updatePlayerName('${player.id}', this.value)">
             
             <div class="player-score" id="score-${player.id}">${player.score}</div>
             
-            <div class="preset-buttons">
-                <button class="preset-btn" onclick="changeScore('${player.id}', 1)">+1</button>
-                <button class="preset-btn" onclick="changeScore('${player.id}', 5)">+5</button>
-                <button class="preset-btn" onclick="changeScore('${player.id}', 10)">+10</button>
-                <button class="preset-btn" onclick="changeScore('${player.id}', -1)">-1</button>
-            </div>
-            
-            <input type="number" class="custom-amount" id="amount-${player.id}" value="1" step="0.1">
-            
             <div class="score-controls">
-                <button class="score-btn decrease" onclick="changeScoreByAmount('${player.id}', -1)">-</button>
-                <button class="score-btn increase" onclick="changeScoreByAmount('${player.id}', 1)">+</button>
+                <button class="score-btn subtract" onclick="changeScore('${player.id}', -1)">-1</button>
+                <button class="score-btn subtract" onclick="changeScore('${player.id}', -5)">-5</button>
+                <input type="number" class="custom-input" id="custom-${player.id}" value="1" step="0.1">
+                <button class="score-btn add" onclick="changeScoreCustom('${player.id}')">+</button>
+                <button class="score-btn add" onclick="changeScore('${player.id}', 1)">+1</button>
+                <button class="score-btn add" onclick="changeScore('${player.id}', 5)">+5</button>
             </div>
         </div>
     `).join('');
 }
 
 function showPlayerView(playerId) {
-    const container = document.querySelector('.container');
-    if (container) {
-        container.innerHTML = `
-            <div class="player-interface">
-                <header class="game-header">
-                    <div class="header-content">
-                        <div class="header-left">
-                            <h1>GameScore Pro</h1>
-                            <p><strong>Session: ${currentSession.code}</strong></p>
-                            <p>${currentSession.name}</p>
-                        </div>
-                        <div class="header-right">
-                            <div class="connection-status">
-                                <span class="status-dot online"></span>
-                                <span class="status-text">Online</span>
-                            </div>
-                            <button onclick="goHome()" class="header-btn">🚪 Leave</button>
-                        </div>
-                    </div>
-                </header>
+    const joinPage = document.getElementById('joinSessionPage');
+    if (joinPage) {
+        joinPage.innerHTML = `
+            <div class="player-view">
+                <div class="player-header">
+                    <h2>👁️ Player View</h2>
+                    <p><strong>Session: ${currentSession.code}</strong> | ${currentSession.name}</p>
+                    <p>Scores update automatically</p>
+                </div>
                 
-                <div class="player-content">
-                    <div class="player-view-info">
-                        <div class="view-mode-indicator">
-                            <span class="indicator-icon">👁️</span>
-                            <span>Player View - Scores update automatically</span>
-                        </div>
-                    </div>
-                    
-                    <div class="players-grid compact" data-player-count="${players.length}">
-                        ${generatePlayerViewTiles(playerId)}
-                    </div>
-                    
-                    <div class="last-updated">
-                        <small>Last updated: <span id="lastUpdated">${new Date().toLocaleTimeString()}</span></small>
-                    </div>
+                <div class="players-grid">
+                    ${generatePlayerViewTiles(playerId)}
+                </div>
+                
+                <div class="player-actions">
+                    <button onclick="goHome()" class="action-btn">🚪 Leave Session</button>
+                </div>
+                
+                <div class="last-updated">
+                    <small>Last updated: <span id="lastUpdated">${new Date().toLocaleTimeString()}</span></small>
                 </div>
             </div>
             
             <style>
-                .player-interface {
-                    min-height: 100vh;
-                    background: #f0f2f5;
-                }
-                
-                .player-content {
+                .player-view {
                     max-width: 1000px;
                     margin: 0 auto;
                     padding: 20px;
                 }
                 
-                .player-view-info {
+                .player-header {
                     text-align: center;
+                    margin-bottom: 30px;
+                    padding: 20px;
+                    background: #e3f2fd;
+                    border-radius: 10px;
+                }
+                
+                .players-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                    gap: 15px;
                     margin-bottom: 30px;
                 }
                 
-                .view-mode-indicator {
-                    background: #e3f2fd;
-                    padding: 15px;
-                    border-radius: 10px;
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 10px;
-                    font-weight: 500;
-                }
-                
-                .indicator-icon {
-                    font-size: 1.2em;
-                }
-                
-                .players-grid.compact {
-                    display: grid;
-                    gap: 15px;
-                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                }
-                
-                .players-grid.compact .player-tile {
+                .player-tile {
                     background: white;
-                    border-radius: 10px;
+                    border: 2px solid #ddd;
+                    border-radius: 8px;
                     padding: 15px;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
                     text-align: center;
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
                 }
                 
-                .players-grid.compact .player-tile.current-player {
-                    border: 3px solid #4CAF50;
+                .player-tile.current-player {
+                    border-color: #4CAF50;
                     background: #f8fff8;
                 }
                 
-                .players-grid.compact .player-name {
-                    font-size: 1.1em;
+                .player-tile .player-name {
                     font-weight: bold;
                     margin-bottom: 10px;
                     color: #333;
                 }
                 
-                .players-grid.compact .player-score {
+                .player-tile .player-score {
                     font-size: 2em;
                     font-weight: bold;
                     color: #667eea;
@@ -715,15 +566,19 @@ function showPlayerView(playerId) {
                 .current-player-badge {
                     background: #4CAF50;
                     color: white;
-                    padding: 4px 8px;
-                    border-radius: 12px;
+                    padding: 2px 8px;
+                    border-radius: 10px;
                     font-size: 0.8em;
-                    margin-left: 8px;
+                    margin-left: 5px;
+                }
+                
+                .player-actions {
+                    text-align: center;
+                    margin: 20px 0;
                 }
                 
                 .last-updated {
                     text-align: center;
-                    margin-top: 30px;
                     color: #666;
                 }
             </style>
@@ -751,8 +606,6 @@ function showPlayerView(playerId) {
                 }
             });
         }
-        
-        console.log('Player view displayed');
     }
 }
 
@@ -786,10 +639,10 @@ function changeScore(playerId, amount) {
     }
 }
 
-function changeScoreByAmount(playerId, multiplier) {
-    const amountInput = document.getElementById(`amount-${playerId}`);
-    const amount = parseFloat(amountInput.value) || 1;
-    changeScore(playerId, amount * multiplier);
+function changeScoreCustom(playerId) {
+    const customInput = document.getElementById(`custom-${playerId}`);
+    const amount = parseFloat(customInput.value) || 1;
+    changeScore(playerId, amount);
 }
 
 function updateScoreDisplay(playerId) {
@@ -841,9 +694,9 @@ function resetAllScores() {
 
 function copySessionCode(code) {
     navigator.clipboard.writeText(code).then(() => {
-        showMessage('Session code copied to clipboard!', 'success');
+        alert('Session code copied to clipboard!');
     }).catch(() => {
-        showMessage('Could not copy code. Please copy manually: ' + code, 'error');
+        alert('Could not copy code. Please copy manually: ' + code);
     });
 }
 
@@ -852,31 +705,6 @@ function goHome() {
     currentSession = null;
     players = [];
     location.reload();
-}
-
-function showMessage(message, type) {
-    const messageDiv = document.createElement('div');
-    messageDiv.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        padding: 15px 25px;
-        border-radius: 8px;
-        color: white;
-        font-weight: bold;
-        z-index: 1000;
-        max-width: 400px;
-        background: ${type === 'success' ? '#4CAF50' : '#f44336'};
-    `;
-    messageDiv.textContent = message;
-    
-    document.body.appendChild(messageDiv);
-    
-    setTimeout(() => {
-        if (document.body.contains(messageDiv)) {
-            document.body.removeChild(messageDiv);
-        }
-    }, 5000);
 }
 
 function generateSessionCode() {
@@ -888,5 +716,5 @@ function generateSessionCode() {
     return result;
 }
 
-console.log('GameScore Pro loaded - COMPLETE VERSION');
+console.log('GameScore Pro loaded - SIMPLE WORKING VERSION');
 
