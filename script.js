@@ -105,17 +105,19 @@ document.addEventListener('DOMContentLoaded', function() {
         joinForm.addEventListener('submit', function(e) {
             e.preventDefault();
             
-            const formData = new FormData(e.target);
-            const joinCodeField = formData.get('joinCode') || formData.get('sessionCode') || formData.get('code');
-            const playerNameField = formData.get('playerName') || formData.get('name');
+            // Get values directly from form elements
+            const codeInput = joinForm.querySelector('input[type="text"]') || joinForm.querySelector('input[placeholder*="code"]') || joinForm.querySelector('input[placeholder*="Code"]');
+            const nameInput = joinForm.querySelector('input[placeholder*="name"]') || joinForm.querySelector('input[placeholder*="Name"]') || joinForm.querySelectorAll('input[type="text"]')[1];
             
-            if (!joinCodeField || !playerNameField) {
+            const joinCode = codeInput ? codeInput.value.trim().toUpperCase() : '';
+            const playerName = nameInput ? nameInput.value.trim() : '';
+            
+            console.log('Join attempt:', { joinCode, playerName });
+            
+            if (!joinCode || !playerName) {
                 alert('Please enter both session code and your name');
                 return;
             }
-            
-            const joinCode = joinCodeField.toString().toUpperCase();
-            const playerName = playerNameField.toString();
             
             if (typeof database !== 'undefined' && database) {
                 const sessionRef = database.ref(`sessions/${joinCode}`);
