@@ -1081,6 +1081,9 @@ function checkWinCondition() {
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('Page loaded, initializing...');
     
+    // Initialize theme
+    initializeTheme();
+    
     await initializeFirebaseWithRetry();
     
     // Bind event listeners
@@ -1116,6 +1119,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 showMessage('Please enter both session code and your name.', 'error');
             }
         };
+    }
+
+    // Theme toggle button
+    const themeToggle = document.getElementById('themeToggle');
+    if (themeToggle) {
+        themeToggle.onclick = toggleTheme;
     }
 
     // Spectator join button
@@ -1168,6 +1177,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('App initialized successfully!');
     showPage(PAGE_IDS.LANDING);
 });
+
+// Theme Management
+function initializeTheme() {
+    const savedTheme = localStorage.getItem('gameScoreTheme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    updateThemeIcon(savedTheme);
+}
+
+function toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('gameScoreTheme', newTheme);
+    updateThemeIcon(newTheme);
+    
+    showMessage(`Switched to ${newTheme} mode`, 'info');
+}
+
+function updateThemeIcon(theme) {
+    const themeIcon = document.getElementById('themeIcon');
+    if (themeIcon) {
+        themeIcon.textContent = theme === 'dark' ? '☀️' : '🌙';
+    }
+}
 
 console.log('GameScore Pro script loaded - Enhanced with Teams, Colors, and Spectator Mode');
 
