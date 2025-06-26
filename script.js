@@ -34,19 +34,21 @@ console.log('GameScore Pro starting...');
 
 // Utility functions
 function showPage(pageId) {
-    Object.values(PAGE_IDS).forEach(id => {
-        const page = document.getElementById(id);
-        if (page) {
-            page.style.display = 'none';
-        }
+    // Hide all pages first
+    document.querySelectorAll('.page').forEach(page => {
+        page.style.display = 'none';
+        page.classList.remove('active');
     });
+    
+    // Show the requested page
     const activePage = document.getElementById(pageId);
     if (activePage) {
         activePage.style.display = 'block';
+        activePage.classList.add('active');
         console.log(`Page shown successfully: ${pageId}`);
     } else {
         console.error(`Page not found: ${pageId}`);
-        console.log('Available pages:', Object.values(PAGE_IDS).filter(id => document.getElementById(id)));
+        console.log('Available pages:', Array.from(document.querySelectorAll('.page')).map(p => p.id));
     }
 }
 
@@ -79,44 +81,79 @@ function updateConnectionStatus(isConnected) {
     firebaseConnectionStatus = isConnected;
     const statusElement = document.getElementById('connectionStatus');
     if (statusElement) {
-        statusElement.textContent = isConnected ? 'Online' : 'Offline';
-        statusElement.className = isConnected ? 'connection-status status-online' : 'connection-status status-offline';
+        if (firebaseInitialized) {
+            statusElement.textContent = isConnected ? 'Online' : 'Offline';
+            statusElement.className = isConnected ? 'connection-status status-online' : 'connection-status status-offline';
+        } else {
+            statusElement.textContent = 'Local Mode';
+            statusElement.className = 'connection-status status-local';
+        }
     }
-    console.log(`Updating connection status: ${isConnected}`);
+    console.log(`Connection status updated: ${firebaseInitialized ? (isConnected ? 'Online' : 'Offline') : 'Local Mode'}`);
 }
 
 // Firebase Initialization and Connection Monitoring
-async function initializeFirebaseWithRetry(retries = 10, delay = 1000) {
-    console.log('Waiting for Firebase with retry logic...');
+async function initializeFirebaseWithRetry(retries = 3, delay = 1000) {
+    console.log('Checking Firebase availability...');
+    
+    // Check if Firebase is loaded and configured
+    if (typeof firebase === 'undefined') {
+        console.log('Firebase SDK not available, running in local mode');
+        firebaseInitialized = false;
+        updateConnectionStatus(false);
+        return;
+    }
+
+    // Check if firebase-config.js has been loaded and configured
+    if (typeof firebaseConfig === 'undefined' || 
+        firebaseConfig.apiKey === "your-api-key-here" || 
+        firebaseConfig.databaseURL.includes("your-project-id")) {
+        console.log('Firebase not configured with real credentials, running in local mode');
+        firebaseInitialized = false;
+        updateConnectionStatus(false);
+        return;
+    }
+
+    // Try to initialize Firebase
     for (let i = 1; i <= retries; i++) {
-        console.log(`Firebase check attempt ${i}/${retries}`);
-        if (typeof firebase !== 'undefined' && firebase.app && firebase.database) {
-            console.log('Firebase found! Setting up connection monitoring...');
-            try {
+        console.log(`Firebase initialization attempt ${i}/${retries}`);
+        try {
+            if (!firebaseInitialized) {
+                firebase.initializeApp(firebaseConfig);
                 db = firebase.database();
                 firebaseInitialized = true;
                 setupFirebaseConnectionMonitoring();
-                console.log('Firebase is ready for operations!');
+                console.log('Firebase initialized successfully!');
                 return;
-            } catch (error) {
-                console.error('Error initializing Firebase:', error);
+            }
+        } catch (error) {
+            console.log(`Firebase initialization attempt ${i} failed:`, error.message);
+            if (i === retries) {
+                console.log('All Firebase initialization attempts failed, running in local mode');
                 firebaseInitialized = false;
+                updateConnectionStatus(false);
+            } else {
+                await new Promise(resolve => setTimeout(resolve, delay));
             }
         }
-        await new Promise(resolve => setTimeout(resolve, delay));
     }
-    console.error('Firebase not available after multiple retries. Running in offline mode.');
-    firebaseInitialized = false;
 }
 
 function setupFirebaseConnectionMonitoring() {
+    if (!firebaseInitialized || !db) return;
+    
     console.log('Setting up Firebase connection monitoring...');
-    const connectedRef = db.ref('.info/connected');
-    connectedRef.on('value', snap => {
-        const isConnected = snap.val();
-        console.log('Firebase connection status changed:', isConnected);
-        updateConnectionStatus(isConnected);
-    });
+    try {
+        const connectedRef = db.ref('.info/connected');
+        connectedRef.on('value', snap => {
+            const isConnected = snap.val();
+            console.log('Firebase connection status changed:', isConnected);
+            updateConnectionStatus(isConnected);
+        });
+    } catch (error) {
+        console.log('Connection monitoring setup failed:', error.message);
+        updateConnectionStatus(false);
+    }
 }
 
 // Session Management
@@ -1090,16 +1127,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     const createButton = document.getElementById('createSessionBtn');
     if (createButton) {
         createButton.onclick = () => showPage(PAGE_IDS.CREATE_SESSION);
+        console.log('Create button bound');
     }
 
     const joinButton = document.getElementById('joinSessionBtn');
     if (joinButton) {
         joinButton.onclick = () => showPage(PAGE_IDS.JOIN_SESSION);
+        console.log('Join button bound');
     }
 
     const createForm = document.getElementById('createSessionForm');
     if (createForm) {
         createForm.onsubmit = handleCreateSession;
+        console.log('Create form bound');
     }
 
     const joinForm = document.getElementById('joinSessionForm');
@@ -1119,12 +1159,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 showMessage('Please enter both session code and your name.', 'error');
             }
         };
+        console.log('Join form bound');
     }
 
     // Theme toggle button
     const themeToggle = document.getElementById('themeToggle');
     if (themeToggle) {
         themeToggle.onclick = toggleTheme;
+        console.log('Theme toggle bound');
     }
 
     // Spectator join button
@@ -1143,6 +1185,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 showMessage('Please enter session code to join as spectator.', 'error');
             }
         };
+        console.log('Spectator button bound');
     }
 
     // Player count controls
@@ -1158,6 +1201,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             }
         };
+        console.log('Increase player button bound');
     }
 
     const decreasePlayerButton = document.getElementById('decreasePlayerCount');
@@ -1172,6 +1216,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             }
         };
+        console.log('Decrease player button bound');
     }
 
     console.log('App initialized successfully!');

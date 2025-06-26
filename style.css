@@ -101,25 +101,31 @@ body {
     box-shadow: 0 4px 15px var(--shadow-color);
 }
 
-/* Connection Status */
+//* Connection Status */
 .connection-status {
     position: fixed;
     top: 20px;
     right: 20px;
     padding: 8px 16px;
     border-radius: 20px;
-    font-weight: bold;
     font-size: 0.9rem;
+    font-weight: 600;
     z-index: 1000;
+    transition: all 0.3s ease;
 }
 
 .status-online {
-    background-color: #28a745;
+    background-color: var(--success-color);
     color: white;
 }
 
 .status-offline {
-    background-color: #dc3545;
+    background-color: var(--danger-color);
+    color: white;
+}
+
+.status-local {
+    background-color: var(--info-color);
     color: white;
 }
 
