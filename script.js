@@ -1,10 +1,11 @@
-// GameScore Pro - Enhanced with Reports and Win Detection
+// GameScore Pro - Host-Controlled Naming
 console.log('GameScore Pro starting...');
 
 let currentSession = null;
 let players = [];
 let formSubmitted = false;
 let currentPlayerId = null; // Track which player this client is
+let isHost = false; // Track if this client is the host
 let scoreHistory = []; // Track score changes over time
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -73,7 +74,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 playAfterTarget: document.querySelector('input[name="playAfterTarget"]')?.checked || false,
                 createdAt: new Date().toISOString(),
                 gameEnded: false,
-                winner: null
+                winner: null,
+                hostId: 'host' // Mark the host
             };
             
             // Initialize players
@@ -82,21 +84,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 players.push({
                     id: `player${i}`,
                     name: `Player ${i}`,
-                    score: currentSession.startingScore
+                    score: currentSession.startingScore,
+                    isAssigned: false // Track if a real person is assigned to this slot
                 });
             }
             
             // Initialize score history
             scoreHistory = [{
                 timestamp: new Date().toISOString(),
+                type: 'gameStart',
                 scores: players.reduce((acc, player) => {
                     acc[player.id] = player.score;
                     return acc;
                 }, {})
             }];
             
-            // Set current player as scorekeeper (player1)
-            currentPlayerId = 'player1';
+            // Set current user as host
+            isHost = true;
+            currentPlayerId = 'host';
             
             // Save to Firebase
             if (typeof database !== 'undefined' && database) {
@@ -148,27 +153,30 @@ document.addEventListener('DOMContentLoaded', function() {
                         players = Object.values(sessionData.players || {});
                         scoreHistory = sessionData.scoreHistory || [];
                         
-                        // Find or assign player
-                        let assignedPlayer = players.find(p => p.name === playerName);
-                        if (!assignedPlayer) {
-                            assignedPlayer = players.find(p => p.name.startsWith('Player '));
-                            if (assignedPlayer) {
-                                assignedPlayer.name = playerName;
-                                // Update in Firebase
-                                const playerRef = database.ref(`sessions/${joinCode}/players/${assignedPlayer.id}`);
-                                playerRef.set(assignedPlayer);
-                                
-                                // Record name change in history
-                                recordScoreChange('nameChange', assignedPlayer.id, assignedPlayer.name);
-                            }
-                        }
+                        // Find an unassigned player slot
+                        let assignedPlayer = players.find(p => !p.isAssigned);
                         
                         if (assignedPlayer) {
-                            currentPlayerId = assignedPlayer.id; // Set current player ID
+                            // Assign this player to the slot
+                            assignedPlayer.name = playerName;
+                            assignedPlayer.isAssigned = true;
+                            assignedPlayer.joinedAt = new Date().toISOString();
+                            
+                            // Set current player info
+                            currentPlayerId = assignedPlayer.id;
+                            isHost = false;
+                            
+                            // Update in Firebase
+                            const playerRef = database.ref(`sessions/${joinCode}/players/${assignedPlayer.id}`);
+                            playerRef.set(assignedPlayer);
+                            
+                            // Record join event
+                            recordScoreChange('playerJoin', assignedPlayer.id, playerName);
+                            
                             alert(`Successfully joined session ${joinCode}!\\n\\nYou are: ${assignedPlayer.name}\\n\\nYou can now see live score updates from the scorekeeper.`);
                             showPlayerView(assignedPlayer.id);
                         } else {
-                            alert('Session is full');
+                            alert('Session is full - all player slots are taken');
                         }
                     } else {
                         alert('Session not found. Check the code and try again.');
@@ -211,6 +219,7 @@ function showSessionSuccess() {
             <div class="session-success">
                 <div class="success-header">
                     <h2>🎉 Session Created Successfully!</h2>
+                    <p class="host-badge">🎮 You are the Host/Scorekeeper</p>
                 </div>
                 
                 <div class="session-code-display">
@@ -227,12 +236,22 @@ function showSessionSuccess() {
                     <p><strong>Target Score:</strong> ${currentSession.targetScore}</p>
                 </div>
                 
+                <div class="host-privileges">
+                    <h4>🎮 Host Privileges:</h4>
+                    <ul>
+                        <li>✅ Manage all player scores</li>
+                        <li>✅ Edit all player names</li>
+                        <li>✅ Control game settings</li>
+                        <li>✅ Generate reports</li>
+                    </ul>
+                </div>
+                
                 <div class="session-instructions">
-                    <h4>How to Join:</h4>
+                    <h4>How Others Join:</h4>
                     <ol>
-                        <li>Other players visit: <strong>https://kappter.github.io/kappscore/</strong></li>
+                        <li>Visit: <strong>https://kappter.github.io/kappscore/</strong></li>
                         <li>Click "Join Session"</li>
-                        <li>Enter the session code: <strong>${currentSession.code}</strong></li>
+                        <li>Enter code: <strong>${currentSession.code}</strong></li>
                         <li>Enter their name</li>
                     </ol>
                 </div>
@@ -254,7 +273,17 @@ function showSessionSuccess() {
                 
                 .success-header h2 {
                     color: #4CAF50;
-                    margin-bottom: 30px;
+                    margin-bottom: 10px;
+                }
+                
+                .host-badge {
+                    background: #4CAF50;
+                    color: white;
+                    padding: 8px 16px;
+                    border-radius: 20px;
+                    display: inline-block;
+                    font-weight: bold;
+                    margin-bottom: 20px;
                 }
                 
                 .session-code-display {
@@ -273,12 +302,17 @@ function showSessionSuccess() {
                     font-family: 'Courier New', monospace;
                 }
                 
-                .session-details {
+                .session-details, .host-privileges {
                     background: #f5f5f5;
                     padding: 20px;
                     border-radius: 10px;
                     margin: 20px 0;
                     text-align: left;
+                }
+                
+                .host-privileges ul {
+                    margin: 10px 0;
+                    padding-left: 20px;
                 }
                 
                 .session-instructions {
@@ -333,23 +367,23 @@ function showSessionSuccess() {
 
 function startScoring() {
     console.log('Starting scoring interface...');
-    showSimpleScoringInterface();
+    showHostScoringInterface();
 }
 
-function showSimpleScoringInterface() {
+function showHostScoringInterface() {
     const createPage = document.getElementById('createSessionPage');
     if (createPage) {
         createPage.innerHTML = `
             <div class="scoring-interface">
                 <div class="scoring-header">
-                    <h2>🎮 Scorekeeper Mode</h2>
+                    <h2>🎮 Host/Scorekeeper Mode</h2>
                     <p><strong>Session: ${currentSession.code}</strong> | ${currentSession.name}</p>
                     <p>Target Score: ${currentSession.targetScore} | Managing ${currentSession.playerCount} players</p>
                     ${currentSession.gameEnded ? `<div class="game-ended">🏆 Game Won by ${currentSession.winner}!</div>` : ''}
                 </div>
                 
                 <div class="players-list">
-                    ${generateSimplePlayerList()}
+                    ${generateHostPlayerList()}
                 </div>
                 
                 <div class="scoring-actions">
@@ -392,7 +426,7 @@ function showSimpleScoringInterface() {
                 
                 .players-list {
                     display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
                     gap: 20px;
                     margin-bottom: 30px;
                 }
@@ -407,21 +441,39 @@ function showSimpleScoringInterface() {
                     position: relative;
                 }
                 
+                .player-card.assigned {
+                    border-color: #4CAF50;
+                    background: #f8fff8;
+                }
+                
                 .player-card.winner {
                     border-color: #FFD700;
                     background: #FFFACD;
                 }
                 
-                .winner-badge {
+                .player-status {
                     position: absolute;
-                    top: -10px;
-                    right: -10px;
+                    top: -8px;
+                    right: -8px;
+                    padding: 4px 8px;
+                    border-radius: 12px;
+                    font-size: 0.7em;
+                    font-weight: bold;
+                }
+                
+                .status-assigned {
+                    background: #4CAF50;
+                    color: white;
+                }
+                
+                .status-waiting {
+                    background: #FF9800;
+                    color: white;
+                }
+                
+                .winner-badge {
                     background: #FFD700;
                     color: #333;
-                    padding: 5px 10px;
-                    border-radius: 15px;
-                    font-size: 0.8em;
-                    font-weight: bold;
                 }
                 
                 .player-name {
@@ -429,15 +481,17 @@ function showSimpleScoringInterface() {
                     font-weight: bold;
                     margin-bottom: 15px;
                     background: none;
-                    border: none;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
                     width: 100%;
                     text-align: center;
                     cursor: text;
+                    padding: 8px;
                 }
                 
                 .player-name:focus {
                     outline: 2px solid #4CAF50;
-                    border-radius: 4px;
+                    border-color: #4CAF50;
                 }
                 
                 .player-score {
@@ -513,18 +567,20 @@ function showSimpleScoringInterface() {
     }
 }
 
-function generateSimplePlayerList() {
+function generateHostPlayerList() {
     return players.map(player => {
         const isWinner = currentSession.gameEnded && currentSession.winner === player.name;
         const hasReachedTarget = player.score >= currentSession.targetScore;
         
         return `
-            <div class="player-card ${isWinner ? 'winner' : ''}" data-player-id="${player.id}">
-                ${isWinner ? '<div class="winner-badge">🏆 WINNER</div>' : ''}
-                ${hasReachedTarget && !currentSession.gameEnded ? '<div class="winner-badge">🎯 TARGET</div>' : ''}
+            <div class="player-card ${player.isAssigned ? 'assigned' : ''} ${isWinner ? 'winner' : ''}" data-player-id="${player.id}">
+                <div class="player-status ${player.isAssigned ? 'status-assigned' : 'status-waiting'}">
+                    ${isWinner ? '🏆 WINNER' : hasReachedTarget && !currentSession.gameEnded ? '🎯 TARGET' : player.isAssigned ? '✅ JOINED' : '⏳ WAITING'}
+                </div>
                 
                 <input type="text" class="player-name" value="${player.name}" 
-                       onblur="updatePlayerName('${player.id}', this.value)">
+                       onblur="updatePlayerName('${player.id}', this.value)"
+                       placeholder="Enter player name">
                 
                 <div class="player-score" id="score-${player.id}">${player.score}</div>
                 
@@ -539,6 +595,8 @@ function generateSimplePlayerList() {
                     <button class="score-btn add" onclick="changeScore('${player.id}', 5)">+5</button>
                     <button class="score-btn add" onclick="changeScore('${player.id}', 10)">+10</button>
                 </div>
+                
+                ${player.isAssigned ? `<small style="color: #666; margin-top: 10px; display: block;">Joined: ${new Date(player.joinedAt).toLocaleTimeString()}</small>` : ''}
             </div>
         `;
     }).join('');
@@ -553,6 +611,7 @@ function showPlayerView(playerId) {
                     <h2>👁️ Player View</h2>
                     <p><strong>Session: ${currentSession.code}</strong> | ${currentSession.name}</p>
                     <p>Target Score: ${currentSession.targetScore} | Scores update automatically</p>
+                    <div class="player-badge">You are: <strong>${players.find(p => p.id === playerId)?.name}</strong></div>
                     ${currentSession.gameEnded ? `<div class="game-ended">🏆 Game Won by ${currentSession.winner}!</div>` : ''}
                 </div>
                 
@@ -561,6 +620,7 @@ function showPlayerView(playerId) {
                 </div>
                 
                 <div class="player-actions">
+                    <button onclick="editMyName('${playerId}')" class="action-btn">✏️ Edit My Name</button>
                     <button onclick="generateReport()" class="action-btn">📊 View Report</button>
                     <button onclick="goHome()" class="action-btn">🚪 Leave Session</button>
                 </div>
@@ -583,6 +643,16 @@ function showPlayerView(playerId) {
                     padding: 20px;
                     background: #e3f2fd;
                     border-radius: 10px;
+                }
+                
+                .player-badge {
+                    background: #4CAF50;
+                    color: white;
+                    padding: 8px 16px;
+                    border-radius: 20px;
+                    display: inline-block;
+                    margin: 10px 0;
+                    font-weight: bold;
                 }
                 
                 .game-ended {
@@ -713,6 +783,15 @@ function showPlayerView(playerId) {
                         playersGrid.innerHTML = generatePlayerViewTiles(playerId);
                     }
                     
+                    // Update player badge
+                    const playerBadge = document.querySelector('.player-badge');
+                    if (playerBadge) {
+                        const currentPlayer = players.find(p => p.id === playerId);
+                        if (currentPlayer) {
+                            playerBadge.innerHTML = `You are: <strong>${currentPlayer.name}</strong>`;
+                        }
+                    }
+                    
                     // Update header if game ended
                     const playerHeader = document.querySelector('.player-header');
                     if (playerHeader && currentSession.gameEnded) {
@@ -747,6 +826,7 @@ function generatePlayerViewTiles(currentPlayerId) {
                 <div class="player-name">
                     ${player.name}
                     ${isCurrentPlayer ? '<span class="current-player-badge">You</span>' : ''}
+                    ${!player.isAssigned ? ' (Waiting)' : ''}
                 </div>
                 <div class="player-score">${player.score}</div>
             </div>
@@ -754,7 +834,22 @@ function generatePlayerViewTiles(currentPlayerId) {
     }).join('');
 }
 
+function editMyName(playerId) {
+    const currentPlayer = players.find(p => p.id === playerId);
+    if (!currentPlayer) return;
+    
+    const newName = prompt(`Edit your name:`, currentPlayer.name);
+    if (newName && newName.trim() && newName.trim() !== currentPlayer.name) {
+        updatePlayerName(playerId, newName.trim());
+    }
+}
+
 function changeScore(playerId, amount) {
+    if (!isHost) {
+        alert('Only the host can change scores');
+        return;
+    }
+    
     const player = players.find(p => p.id === playerId);
     if (player && !currentSession.gameEnded) {
         const oldScore = player.score;
@@ -777,19 +872,7 @@ function changeScore(playerId, amount) {
         checkWinCondition();
         
         // Update Firebase
-        if (typeof database !== 'undefined' && database && currentSession) {
-            const sessionRef = database.ref(`sessions/${currentSession.code}`);
-            const playersObj = {};
-            players.forEach(p => {
-                playersObj[p.id] = p;
-            });
-            sessionRef.update({
-                players: playersObj,
-                metadata: currentSession,
-                scoreHistory: scoreHistory,
-                lastUpdated: new Date().toISOString()
-            });
-        }
+        updateFirebase();
     }
 }
 
@@ -809,7 +892,15 @@ function updateScoreDisplay(playerId) {
 
 function updatePlayerName(playerId, newName) {
     const player = players.find(p => p.id === playerId);
-    if (player && newName.trim() && newName.trim() !== player.name) {
+    if (!player || !newName.trim()) return;
+    
+    // Check permissions
+    if (!isHost && playerId !== currentPlayerId) {
+        alert('You can only edit your own name');
+        return;
+    }
+    
+    if (newName.trim() !== player.name) {
         const oldName = player.name;
         player.name = newName.trim();
         console.log(`Player ${playerId} renamed from ${oldName} to ${player.name}`);
@@ -818,18 +909,23 @@ function updatePlayerName(playerId, newName) {
         recordScoreChange('nameChange', playerId, newName, oldName);
         
         // Update Firebase
-        if (typeof database !== 'undefined' && database && currentSession) {
-            const sessionRef = database.ref(`sessions/${currentSession.code}`);
-            const playersObj = {};
-            players.forEach(p => {
-                playersObj[p.id] = p;
-            });
-            sessionRef.update({
-                players: playersObj,
-                scoreHistory: scoreHistory,
-                lastUpdated: new Date().toISOString()
-            });
-        }
+        updateFirebase();
+    }
+}
+
+function updateFirebase() {
+    if (typeof database !== 'undefined' && database && currentSession) {
+        const sessionRef = database.ref(`sessions/${currentSession.code}`);
+        const playersObj = {};
+        players.forEach(p => {
+            playersObj[p.id] = p;
+        });
+        sessionRef.update({
+            players: playersObj,
+            metadata: currentSession,
+            scoreHistory: scoreHistory,
+            lastUpdated: new Date().toISOString()
+        });
     }
 }
 
@@ -883,8 +979,8 @@ function checkWinCondition() {
             alert(`🏆 GAME WON! 🏆\\n\\n${winner.name} wins with ${winner.score} points!\\n\\nTarget was ${currentSession.targetScore} points.`);
             
             // Refresh the interface to show winner
-            if (currentPlayerId === 'player1') {
-                showSimpleScoringInterface();
+            if (isHost) {
+                showHostScoringInterface();
             }
         }
     }
@@ -1017,12 +1113,17 @@ function generateReport() {
                     <h1 class="report-title">🎮 GameScore Pro - Session Report</h1>
                     <p><strong>Session:</strong> ${currentSession.code} | <strong>Game:</strong> ${currentSession.name}</p>
                     <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+                    <p><strong>Host:</strong> ${isHost ? 'You' : 'Another player'}</p>
                 </div>
                 
                 <div class="session-info">
                     <div class="info-card">
                         <h4>Players</h4>
                         <div class="value">${currentSession.playerCount}</div>
+                    </div>
+                    <div class="info-card">
+                        <h4>Joined Players</h4>
+                        <div class="value">${players.filter(p => p.isAssigned).length}</div>
                     </div>
                     <div class="info-card">
                         <h4>Target Score</h4>
@@ -1074,38 +1175,38 @@ function generateReport() {
 }
 
 function prepareChartData(playerColors) {
-    // Get all unique timestamps
-    const timestamps = [...new Set(scoreHistory.map(h => h.timestamp))].sort();
+    // Get all score change events
+    const scoreChanges = scoreHistory.filter(h => h.type === 'scoreChange' || h.type === 'gameStart');
     
     // Create datasets for each player
     const datasets = players.map((player, index) => {
         const data = [];
         let currentScore = currentSession.startingScore;
         
-        timestamps.forEach(timestamp => {
-            const change = scoreHistory.find(h => h.timestamp === timestamp && h.playerId === player.id && h.type === 'scoreChange');
-            if (change) {
+        scoreChanges.forEach((change, changeIndex) => {
+            if (change.playerId === player.id && change.type === 'scoreChange') {
                 currentScore = change.newScore;
             }
             data.push(currentScore);
         });
         
         return {
-            label: player.name,
+            label: player.name + (player.isAssigned ? '' : ' (Not Joined)'),
             data: data,
             borderColor: playerColors[index % playerColors.length],
             backgroundColor: playerColors[index % playerColors.length] + '20',
             fill: false,
             tension: 0.1,
             pointRadius: 4,
-            pointHoverRadius: 6
+            pointHoverRadius: 6,
+            borderDash: player.isAssigned ? [] : [5, 5] // Dashed line for unassigned players
         };
     });
     
     return {
         type: 'line',
         data: {
-            labels: timestamps.map((_, index) => `Move ${index + 1}`),
+            labels: scoreChanges.map((_, index) => `Move ${index + 1}`),
             datasets: datasets
         },
         options: {
@@ -1155,6 +1256,7 @@ function generateFinalScoresHTML(playerColors) {
                 <div class="score-card ${isWinner ? 'winner' : ''}" style="border-left-color: ${color}">
                     <div class="player-name">
                         ${isWinner ? '🏆 ' : `#${index + 1} `}${player.name}
+                        ${!player.isAssigned ? ' (Not Joined)' : ''}
                     </div>
                     <div class="player-score">${player.score}</div>
                 </div>
@@ -1164,7 +1266,7 @@ function generateFinalScoresHTML(playerColors) {
 
 function generateTimelineHTML() {
     return scoreHistory
-        .filter(h => h.type === 'scoreChange' || h.type === 'gameEnd')
+        .filter(h => h.type === 'scoreChange' || h.type === 'gameEnd' || h.type === 'playerJoin' || h.type === 'nameChange')
         .slice(-20) // Show last 20 events
         .reverse()
         .map(change => {
@@ -1176,6 +1278,10 @@ function generateTimelineHTML() {
                 description = `${change.playerName}: ${change.oldScore} → ${change.newScore} (${sign}${change.amount})`;
             } else if (change.type === 'gameEnd') {
                 description = `🏆 Game won by ${change.playerName} with ${change.value} points!`;
+            } else if (change.type === 'playerJoin') {
+                description = `👋 ${change.value} joined the game`;
+            } else if (change.type === 'nameChange') {
+                description = `✏️ Player renamed from "${change.oldName}" to "${change.newName}"`;
             }
             
             return `
@@ -1212,6 +1318,11 @@ function showSessionCode() {
 }
 
 function resetAllScores() {
+    if (!isHost) {
+        alert('Only the host can reset scores');
+        return;
+    }
+    
     if (confirm('Reset all scores to starting score? This will clear the game history.')) {
         players.forEach(player => {
             player.score = currentSession.startingScore;
@@ -1235,23 +1346,11 @@ function resetAllScores() {
         console.log('All scores reset');
         
         // Update Firebase
-        if (typeof database !== 'undefined' && database && currentSession) {
-            const sessionRef = database.ref(`sessions/${currentSession.code}`);
-            const playersObj = {};
-            players.forEach(player => {
-                playersObj[player.id] = player;
-            });
-            sessionRef.update({
-                players: playersObj,
-                metadata: currentSession,
-                scoreHistory: scoreHistory,
-                lastUpdated: new Date().toISOString()
-            });
-        }
+        updateFirebase();
         
         // Refresh interface
-        if (currentPlayerId === 'player1') {
-            showSimpleScoringInterface();
+        if (isHost) {
+            showHostScoringInterface();
         }
     }
 }
@@ -1269,6 +1368,7 @@ function goHome() {
     currentSession = null;
     players = [];
     currentPlayerId = null;
+    isHost = false;
     scoreHistory = [];
     location.reload();
 }
@@ -1282,5 +1382,5 @@ function generateSessionCode() {
     return result;
 }
 
-console.log('GameScore Pro loaded - ENHANCED WITH REPORTS AND WIN DETECTION');
+console.log('GameScore Pro loaded - HOST-CONTROLLED NAMING');
 
