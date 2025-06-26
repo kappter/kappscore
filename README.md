@@ -2,8 +2,6 @@
 
 **Universal score tracking for any game - Real-time, multiplayer, beautiful.**
 
-![GamePlay](https://github.com/kappter/portfolio/blob/main/images/kapscore.png?raw=true)
-
 [![Live Demo](https://img.shields.io/badge/🌐_Live_Demo-kappter.github.io/kappscore-blue?style=for-the-badge)](https://kappter.github.io/kappscore/)
 [![GitHub Pages](https://img.shields.io/badge/Deployed_on-GitHub_Pages-green?style=for-the-badge&logo=github)](https://pages.github.com/)
 [![Firebase](https://img.shields.io/badge/Powered_by-Firebase-orange?style=for-the-badge&logo=firebase)](https://firebase.google.com/)
@@ -39,7 +37,7 @@
 - **Visual Feedback** - Clear indicators for winners and targets
 - **Accessibility** - Works great on all devices and screen sizes
 
----
+![GamePlay](https://github.com/kappter/portfolio/blob/main/images/kapscore.png?raw=true)
 
 ## 🚀 Quick Start
 
