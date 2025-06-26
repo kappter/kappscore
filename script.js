@@ -263,6 +263,11 @@ function showSessionSuccess() {
                 </div>
             </div>
             
+            <!-- Fixed Footer -->
+            <div class="fixed-footer">
+                © 2025 Ken Kapptie | For educational use only | All rights reserved | <a href="#" onclick="alert('More tools coming soon!')">More tools like this</a>
+            </div>
+            
             <style>
                 .session-success {
                     max-width: 600px;
@@ -392,6 +397,11 @@ function showHostScoringInterface() {
                     <button onclick="resetAllScores()" class="action-btn">🔄 Reset Scores</button>
                     <button onclick="goHome()" class="action-btn">🏠 End Game</button>
                 </div>
+            </div>
+            
+            <!-- Fixed Footer -->
+            <div class="fixed-footer">
+                © 2025 Ken Kapptie | For educational use only | All rights reserved | <a href="#" onclick="alert('More tools coming soon!')">More tools like this</a>
             </div>
             
             <style>
@@ -630,6 +640,11 @@ function showPlayerView(playerId) {
                 </div>
             </div>
             
+            <!-- Fixed Footer -->
+            <div class="fixed-footer">
+                © 2025 Ken Kapptie | For educational use only | All rights reserved | <a href="#" onclick="alert('More tools coming soon!')">More tools like this</a>
+            </div>
+            
             <style>
                 .player-view {
                     max-width: 1000px;
@@ -769,6 +784,42 @@ function showPlayerView(playerId) {
                 .last-updated {
                     text-align: center;
                     color: #666;
+                    margin-bottom: 80px; /* Account for fixed footer */
+                }
+                
+                /* Fixed Footer */
+                .fixed-footer {
+                    position: fixed;
+                    bottom: 0;
+                    left: 0;
+                    right: 0;
+                    background: #333;
+                    color: #fff;
+                    text-align: center;
+                    padding: 8px 10px;
+                    font-size: 12px;
+                    z-index: 1000;
+                    border-top: 1px solid #555;
+                    box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+                }
+                
+                .fixed-footer a {
+                    color: #4CAF50;
+                    text-decoration: none;
+                }
+                
+                .fixed-footer a:hover {
+                    text-decoration: underline;
+                }
+                
+                /* Adjust body to account for footer */
+                body {
+                    padding-bottom: 50px;
+                }
+                
+                /* Adjust main containers */
+                .player-view, .scoring-interface, .session-success {
+                    margin-bottom: 60px;
                 }
             </style>
         `;
