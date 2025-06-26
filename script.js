@@ -1,2003 +1,67 @@
-// GameScore Pro - Enhanced with Teams & Colors
-console.log('GameScore Pro starting...');
+// GameScore Pro - Enhanced with Team Management, Tile Colors, and Spectator Mode
 
-let players = [];
+// Firebase Configuration (ensure firebase-config.js is loaded first)
+let db;
+let firebaseInitialized = false;
+let firebaseConnectionStatus = false; // true if online, false if offline
+
+// Current session data
 let currentSession = null;
-let scoreHistory = [];
-let teams = [];
-let currentPlayerId = null;
-let isHost = false;
+let currentPlayerId = null; // ID of the current player (for "You" badge)
+let currentPlayerName = "Guest"; // Name of the current player
+let currentPlayerTileColor = '#007bff'; // Default tile color
+let isSpectator = false; // Track if current user is a spectator
 
-// Color palette for player tiles
-const playerColors = [
-    { name: 'Blue', value: '#2196F3', light: '#E3F2FD' },
-    { name: 'Green', value: '#4CAF50', light: '#E8F5E9' },
-    { name: 'Purple', value: '#9C27B0', light: '#F3E5F5' },
-    { name: 'Orange', value: '#FF9800', light: '#FFF3E0' },
-    { name: 'Red', value: '#F44336', light: '#FFEBEE' },
-    { name: 'Teal', value: '#009688', light: '#E0F2F1' },
-    { name: 'Pink', value: '#E91E63', light: '#FCE4EC' },
-    { name: 'Indigo', value: '#3F51B5', light: '#E8EAF6' },
-    { name: 'Cyan', value: '#00BCD4', light: '#E0F7FA' },
-    { name: 'Amber', value: '#FFC107', light: '#FFF8E1' },
-    { name: 'Deep Purple', value: '#673AB7', light: '#EDE7F6' },
-    { name: 'Light Green', value: '#8BC34A', light: '#F1F8E9' }
+// Constants for page IDs
+const PAGE_IDS = {
+    LANDING: 'landing',
+    CREATE_SESSION: 'createSession',
+    JOIN_SESSION: 'joinSession',
+    SESSION_SUCCESS: 'sessionSuccess',
+    SCOREKEEPER: 'scorekeeper',
+    PLAYER_VIEW: 'playerView',
+    SPECTATOR_VIEW: 'spectatorView',
+    TEAM_SETUP: 'teamSetup'
+};
+
+// Color palette for players and teams
+const COLOR_PALETTE = [
+    '#007bff', '#28a745', '#dc3545', '#ffc107', '#17a2b8', '#6f42c1',
+    '#fd7e14', '#20c997', '#e83e8c', '#6c757d', '#343a40', '#f8f9fa'
 ];
 
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Page loaded, initializing...');
-    initializeApp();
-});
+console.log('GameScore Pro starting...');
 
-function initializeApp() {
-    console.log('Initializing app...');
-    
-    // Bind main navigation buttons
-    const createBtn = document.querySelector('[onclick*="showPage"][onclick*="createSession"]');
-    if (createBtn) {
-        createBtn.addEventListener('click', () => showPage('createSessionPage'));
-        console.log('Create button bound');
-    }
-    
-    const joinBtn = document.querySelector('[onclick*="showPage"][onclick*="joinSession"]');
-    if (joinBtn) {
-        joinBtn.addEventListener('click', () => showPage('joinSessionPage'));
-        console.log('Join button bound');
-    }
-    
-    // Bind player count controls
-    const increaseBtn = document.querySelector('[onclick*="changePlayerCount(1)"]');
-    if (increaseBtn) {
-        increaseBtn.addEventListener('click', () => changePlayerCount(1));
-        console.log('Increase player button bound');
-    }
-    
-    const decreaseBtn = document.querySelector('[onclick*="changePlayerCount(-1)"]');
-    if (decreaseBtn) {
-        decreaseBtn.addEventListener('click', () => changePlayerCount(-1));
-        console.log('Decrease player button bound');
-    }
-    
-    // Bind forms
-    const createForm = document.querySelector('#createSessionForm, form[onsubmit*="createSession"]');
-    if (createForm) {
-        createForm.addEventListener('submit', handleCreateSession);
-        console.log('Create form bound');
-    }
-    
-    const joinForm = document.querySelector('#joinSessionForm, form[onsubmit*="joinSession"]');
-    if (joinForm) {
-        joinForm.addEventListener('submit', handleJoinSession);
-        console.log('Join form bound');
-    }
-    
-    console.log('App initialized successfully!');
-}
-
+// Utility functions
 function showPage(pageId) {
-    console.log('Showing page:', pageId);
-    
-    const pages = ['landing', 'createSession', 'joinSession', 'scorekeeper', 'playerView'];
-    
-    pages.forEach(id => {
-        const page = document.getElementById(id) || document.getElementById(id + 'Page');
+    Object.values(PAGE_IDS).forEach(id => {
+        const page = document.getElementById(id);
         if (page) {
             page.style.display = 'none';
         }
     });
-    
-    const targetPage = document.getElementById(pageId) || document.getElementById(pageId.replace('Page', ''));
-    if (targetPage) {
-        targetPage.style.display = 'block';
-        console.log('Page shown:', pageId);
+    const activePage = document.getElementById(pageId);
+    if (activePage) {
+        activePage.style.display = 'block';
+        console.log(`Page shown successfully: ${pageId}`);
     } else {
-        console.log('Page not found:', pageId);
+        console.error(`Page not found: ${pageId}`);
+        console.log('Available pages:', Object.values(PAGE_IDS).filter(id => document.getElementById(id)));
     }
 }
 
-function changePlayerCount(delta) {
-    const playerCountInput = document.getElementById('playerCount') || document.querySelector('input[name="playerCount"]');
-    if (playerCountInput) {
-        let currentCount = parseInt(playerCountInput.value) || 2;
-        currentCount = Math.max(1, Math.min(12, currentCount + delta));
-        playerCountInput.value = currentCount;
-        console.log('Player count changed to:', currentCount);
+function showMessage(message, type = 'info') {
+    const messageContainer = document.getElementById('messageContainer');
+    if (messageContainer) {
+        messageContainer.textContent = message;
+        messageContainer.className = `message ${type}`;
+        messageContainer.style.display = 'block';
+        setTimeout(() => {
+            messageContainer.style.display = 'none';
+        }, 5000);
     }
 }
 
-function handleCreateSession(e) {
-    e.preventDefault();
-    console.log('Create session form submitted');
-    
-    // Get form data with multiple fallbacks
-    const form = e.target;
-    const formData = new FormData(form);
-    
-    const sessionName = formData.get('sessionName') || document.getElementById('sessionName')?.value || 'Game Session';
-    const playerCount = parseInt(formData.get('playerCount') || document.getElementById('playerCount')?.value || 2);
-    const startingScore = parseInt(formData.get('startingScore') || document.getElementById('startingScore')?.value || 0);
-    const targetScore = parseInt(formData.get('targetScore') || document.getElementById('targetScore')?.value || 500);
-    const allowDecimals = formData.get('allowDecimals') === 'on' || document.querySelector('input[name="allowDecimals"]')?.checked || false;
-    const playAfterTarget = formData.get('playAfterTarget') === 'on' || document.querySelector('input[name="playAfterTarget"]')?.checked || false;
-    
-    const sessionData = {
-        name: sessionName,
-        playerCount: playerCount,
-        startingScore: startingScore,
-        allowDecimals: allowDecimals,
-        targetScore: targetScore,
-        playAfterTarget: playAfterTarget
-    };
-    
-    console.log('Session data:', sessionData);
-    createSession(sessionData);
-}
-
-function createSession(sessionData) {
-    console.log('Creating session...');
-    
-    // Generate session code
-    const sessionCode = generateSessionCode();
-    console.log('Generated session code:', sessionCode);
-    
-    // Initialize players with default colors
-    const initialPlayers = [];
-    for (let i = 0; i < sessionData.playerCount; i++) {
-        initialPlayers.push({
-            id: `player${i + 1}`,
-            name: `Player ${i + 1}`,
-            score: sessionData.startingScore,
-            isAssigned: false,
-            color: playerColors[i % playerColors.length],
-            teamId: null
-        });
-    }
-    
-    players = initialPlayers;
-    console.log('Initialized players:', players);
-    
-    // Create session object
-    currentSession = {
-        code: sessionCode,
-        name: sessionData.name,
-        playerCount: sessionData.playerCount,
-        startingScore: sessionData.startingScore,
-        allowDecimals: sessionData.allowDecimals,
-        targetScore: sessionData.targetScore,
-        playAfterTarget: sessionData.playAfterTarget,
-        gameEnded: false,
-        winner: null,
-        createdAt: new Date().toISOString(),
-        hasTeams: false
-    };
-    
-    teams = []; // Initialize empty teams
-    scoreHistory = [];
-    isHost = true;
-    
-    console.log('Current session created:', currentSession);
-    
-    // Show session success screen
-    showSessionSuccess();
-    
-    // Save to Firebase if available
-    if (typeof database !== 'undefined' && database) {
-        console.log('Saving session to Firebase...');
-        const sessionRef = database.ref(`sessions/${sessionCode}`);
-        sessionRef.set({
-            metadata: currentSession,
-            players: players.reduce((acc, player) => {
-                acc[player.id] = player;
-                return acc;
-            }, {}),
-            teams: {},
-            scoreHistory: []
-        }).then(() => {
-            console.log('Session saved to Firebase');
-        }).catch(error => {
-            console.error('Error saving to Firebase:', error);
-        });
-    }
-}
-
-function showSessionSuccess() {
-    document.body.innerHTML = `
-        <div class="session-success">
-            <div class="success-header">
-                <h1>🎉 Session Created!</h1>
-                <div class="session-code-display">
-                    <div class="session-code-label">Session Code:</div>
-                    <div class="session-code-value">${currentSession.code}</div>
-                </div>
-            </div>
-            
-            <div class="session-details">
-                <h3>📋 Session Details</h3>
-                <div class="detail-grid">
-                    <div class="detail-item">
-                        <strong>Game Name:</strong> ${currentSession.name}
-                    </div>
-                    <div class="detail-item">
-                        <strong>Players:</strong> ${currentSession.playerCount}
-                    </div>
-                    <div class="detail-item">
-                        <strong>Starting Score:</strong> ${currentSession.startingScore}
-                    </div>
-                    <div class="detail-item">
-                        <strong>Target Score:</strong> ${currentSession.targetScore}
-                    </div>
-                </div>
-            </div>
-            
-            <div class="sharing-instructions">
-                <h3>📱 How Others Can Join</h3>
-                <div class="instruction-box">
-                    <ol>
-                        <li>Go to the GameScore Pro website</li>
-                        <li>Click "Join Session"</li>
-                        <li>Enter code: <strong>${currentSession.code}</strong></li>
-                        <li>Enter their name</li>
-                    </ol>
-                </div>
-            </div>
-            
-            <div class="session-actions">
-                <button onclick="setupTeams()" class="primary-btn large-btn">👥 Setup Teams (Optional)</button>
-                <button onclick="startScoring()" class="primary-btn large-btn">🎮 Start Scoring</button>
-                <button onclick="copySessionCode('${currentSession.code}')" class="secondary-btn">📋 Copy Code</button>
-                <button onclick="goHome()" class="secondary-btn">← Back to Home</button>
-            </div>
-        </div>
-        
-        <!-- Fixed Footer -->
-        <div class="fixed-footer">
-            © 2025 Ken Kapptie | For educational use only | All rights reserved | <a href="#" onclick="alert('More tools coming soon!')">More tools like this</a>
-        </div>
-        
-        <style>
-            .session-success {
-                max-width: 600px;
-                margin: 0 auto;
-                padding: 20px;
-                text-align: center;
-            }
-            
-            .success-header {
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                padding: 30px;
-                border-radius: 15px;
-                margin-bottom: 30px;
-            }
-            
-            .session-code-display {
-                margin-top: 20px;
-            }
-            
-            .session-code-label {
-                font-size: 1.1em;
-                margin-bottom: 10px;
-                opacity: 0.9;
-            }
-            
-            .session-code-value {
-                font-size: 3em;
-                font-weight: bold;
-                letter-spacing: 0.1em;
-                background: rgba(255,255,255,0.2);
-                padding: 15px 30px;
-                border-radius: 10px;
-                display: inline-block;
-                border: 2px solid rgba(255,255,255,0.3);
-            }
-            
-            .session-details {
-                background: #f8f9fa;
-                padding: 25px;
-                border-radius: 10px;
-                margin-bottom: 25px;
-            }
-            
-            .detail-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                gap: 15px;
-                margin-top: 15px;
-            }
-            
-            .detail-item {
-                background: white;
-                padding: 15px;
-                border-radius: 8px;
-                border-left: 4px solid #667eea;
-            }
-            
-            .sharing-instructions {
-                background: #e8f4fd;
-                padding: 25px;
-                border-radius: 10px;
-                margin-bottom: 25px;
-            }
-            
-            .instruction-box {
-                background: white;
-                padding: 20px;
-                border-radius: 8px;
-                margin-top: 15px;
-            }
-            
-            .instruction-box ol {
-                text-align: left;
-                margin: 0;
-                padding-left: 20px;
-            }
-            
-            .instruction-box li {
-                margin-bottom: 8px;
-                font-size: 1.1em;
-            }
-            
-            .session-actions {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 15px;
-                justify-content: center;
-                margin-bottom: 60px;
-            }
-            
-            .primary-btn {
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                border: none;
-                padding: 15px 30px;
-                border-radius: 8px;
-                cursor: pointer;
-                font-size: 16px;
-                font-weight: bold;
-                transition: transform 0.2s;
-            }
-            
-            .primary-btn:hover {
-                transform: translateY(-2px);
-            }
-            
-            .large-btn {
-                padding: 18px 36px;
-                font-size: 18px;
-            }
-            
-            .secondary-btn {
-                background: #6c757d;
-                color: white;
-                border: none;
-                padding: 12px 24px;
-                border-radius: 8px;
-                cursor: pointer;
-                font-size: 14px;
-            }
-            
-            .secondary-btn:hover {
-                background: #5a6268;
-            }
-            
-            /* Fixed Footer */
-            .fixed-footer {
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                background: #333;
-                color: #fff;
-                text-align: center;
-                padding: 8px 10px;
-                font-size: 12px;
-                z-index: 1000;
-                border-top: 1px solid #555;
-                box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
-            }
-            
-            .fixed-footer a {
-                color: #4CAF50;
-                text-decoration: none;
-            }
-            
-            .fixed-footer a:hover {
-                text-decoration: underline;
-            }
-            
-            body {
-                padding-bottom: 50px;
-            }
-            
-            @media (max-width: 768px) {
-                .session-code-value {
-                    font-size: 2.2em;
-                    padding: 12px 20px;
-                }
-                
-                .detail-grid {
-                    grid-template-columns: 1fr;
-                }
-                
-                .session-actions {
-                    flex-direction: column;
-                    align-items: center;
-                }
-                
-                .primary-btn, .secondary-btn {
-                    width: 100%;
-                    max-width: 300px;
-                }
-            }
-        </style>
-    `;
-}
-
-function setupTeams() {
-    document.body.innerHTML = `
-        <div class="team-setup">
-            <div class="team-header">
-                <h1>👥 Team Setup</h1>
-                <p>Create teams and assign players. Teams must have 2+ players.</p>
-            </div>
-            
-            <div class="current-players">
-                <h3>🎮 Current Players</h3>
-                <div class="players-grid" id="playersGrid">
-                    ${generatePlayerSetupTiles()}
-                </div>
-            </div>
-            
-            <div class="team-management">
-                <h3>🏆 Teams</h3>
-                <div class="team-controls">
-                    <button onclick="createNewTeam()" class="primary-btn">➕ Create New Team</button>
-                    <button onclick="clearAllTeams()" class="secondary-btn">🗑️ Clear All Teams</button>
-                </div>
-                <div class="teams-list" id="teamsList">
-                    ${generateTeamsList()}
-                </div>
-            </div>
-            
-            <div class="team-actions">
-                <button onclick="finishTeamSetup()" class="primary-btn large-btn">✅ Finish Team Setup</button>
-                <button onclick="startScoring()" class="secondary-btn">⏭️ Skip Teams & Start Scoring</button>
-                <button onclick="showSessionSuccess()" class="secondary-btn">← Back</button>
-            </div>
-        </div>
-        
-        <!-- Fixed Footer -->
-        <div class="fixed-footer">
-            © 2025 Ken Kapptie | For educational use only | All rights reserved | <a href="#" onclick="alert('More tools coming soon!')">More tools like this</a>
-        </div>
-        
-        <style>
-            .team-setup {
-                max-width: 1000px;
-                margin: 0 auto;
-                padding: 20px;
-            }
-            
-            .team-header {
-                text-align: center;
-                margin-bottom: 30px;
-                padding: 20px;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                border-radius: 15px;
-            }
-            
-            .current-players, .team-management {
-                background: #f8f9fa;
-                padding: 25px;
-                border-radius: 10px;
-                margin-bottom: 25px;
-            }
-            
-            .players-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                gap: 15px;
-                margin-top: 15px;
-            }
-            
-            .player-setup-tile {
-                background: white;
-                border: 2px solid #ddd;
-                border-radius: 10px;
-                padding: 15px;
-                text-align: center;
-                cursor: pointer;
-                transition: all 0.3s;
-                position: relative;
-            }
-            
-            .player-setup-tile:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            }
-            
-            .player-setup-tile.in-team {
-                border-color: #4CAF50;
-                background: #f8fff8;
-            }
-            
-            .player-color-selector {
-                display: flex;
-                justify-content: center;
-                gap: 5px;
-                margin: 10px 0;
-                flex-wrap: wrap;
-            }
-            
-            .color-option {
-                width: 25px;
-                height: 25px;
-                border-radius: 50%;
-                cursor: pointer;
-                border: 2px solid transparent;
-                transition: all 0.2s;
-            }
-            
-            .color-option:hover {
-                transform: scale(1.1);
-            }
-            
-            .color-option.selected {
-                border-color: #333;
-                transform: scale(1.2);
-            }
-            
-            .player-name-input {
-                background: none;
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                padding: 8px;
-                text-align: center;
-                width: 100%;
-                margin-bottom: 10px;
-                font-weight: bold;
-            }
-            
-            .team-badge {
-                position: absolute;
-                top: -8px;
-                right: -8px;
-                background: #4CAF50;
-                color: white;
-                padding: 4px 8px;
-                border-radius: 12px;
-                font-size: 0.7em;
-                font-weight: bold;
-            }
-            
-            .team-controls {
-                display: flex;
-                gap: 10px;
-                margin-bottom: 20px;
-                flex-wrap: wrap;
-            }
-            
-            .teams-list {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-                gap: 20px;
-            }
-            
-            .team-card {
-                background: white;
-                border: 2px solid #4CAF50;
-                border-radius: 10px;
-                padding: 20px;
-                position: relative;
-            }
-            
-            .team-header-card {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 15px;
-            }
-            
-            .team-name-input {
-                background: none;
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                padding: 8px;
-                font-weight: bold;
-                font-size: 1.1em;
-                flex-grow: 1;
-                margin-right: 10px;
-            }
-            
-            .delete-team-btn {
-                background: #dc3545;
-                color: white;
-                border: none;
-                padding: 6px 12px;
-                border-radius: 4px;
-                cursor: pointer;
-                font-size: 12px;
-            }
-            
-            .team-members {
-                min-height: 60px;
-                border: 2px dashed #ddd;
-                border-radius: 8px;
-                padding: 10px;
-                background: #f8f9fa;
-            }
-            
-            .team-member {
-                display: inline-block;
-                background: #e9ecef;
-                padding: 5px 10px;
-                border-radius: 15px;
-                margin: 2px;
-                font-size: 0.9em;
-                border-left: 4px solid;
-            }
-            
-            .team-actions {
-                text-align: center;
-                margin: 30px 0 60px 0;
-            }
-            
-            .primary-btn {
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                border: none;
-                padding: 15px 30px;
-                border-radius: 8px;
-                cursor: pointer;
-                font-size: 16px;
-                font-weight: bold;
-                margin: 5px 10px;
-                transition: transform 0.2s;
-            }
-            
-            .primary-btn:hover {
-                transform: translateY(-2px);
-            }
-            
-            .large-btn {
-                padding: 18px 36px;
-                font-size: 18px;
-            }
-            
-            .secondary-btn {
-                background: #6c757d;
-                color: white;
-                border: none;
-                padding: 12px 24px;
-                border-radius: 8px;
-                cursor: pointer;
-                font-size: 14px;
-                margin: 5px 10px;
-            }
-            
-            .secondary-btn:hover {
-                background: #5a6268;
-            }
-            
-            /* Fixed Footer */
-            .fixed-footer {
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                background: #333;
-                color: #fff;
-                text-align: center;
-                padding: 8px 10px;
-                font-size: 12px;
-                z-index: 1000;
-                border-top: 1px solid #555;
-                box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
-            }
-            
-            .fixed-footer a {
-                color: #4CAF50;
-                text-decoration: none;
-            }
-            
-            .fixed-footer a:hover {
-                text-decoration: underline;
-            }
-            
-            body {
-                padding-bottom: 50px;
-            }
-            
-            @media (max-width: 768px) {
-                .players-grid {
-                    grid-template-columns: 1fr;
-                }
-                
-                .teams-list {
-                    grid-template-columns: 1fr;
-                }
-                
-                .team-controls {
-                    flex-direction: column;
-                }
-                
-                .team-actions {
-                    flex-direction: column;
-                    align-items: center;
-                }
-                
-                .primary-btn, .secondary-btn {
-                    width: 100%;
-                    max-width: 300px;
-                    margin: 5px 0;
-                }
-            }
-        </style>
-    `;
-}
-
-function generatePlayerSetupTiles() {
-    return players.map(player => {
-        const team = teams.find(t => t.members.includes(player.id));
-        return `
-            <div class="player-setup-tile ${team ? 'in-team' : ''}" data-player-id="${player.id}">
-                ${team ? `<div class="team-badge">${team.name}</div>` : ''}
-                
-                <input type="text" class="player-name-input" value="${player.name}" 
-                       onchange="updatePlayerName('${player.id}', this.value)">
-                
-                <div class="player-color-selector">
-                    ${playerColors.map(color => `
-                        <div class="color-option ${player.color.value === color.value ? 'selected' : ''}" 
-                             style="background-color: ${color.value}"
-                             onclick="updatePlayerColor('${player.id}', '${color.value}')"
-                             title="${color.name}">
-                        </div>
-                    `).join('')}
-                </div>
-                
-                <div style="margin-top: 10px;">
-                    ${team ? 
-                        `<button onclick="removeFromTeam('${player.id}')" class="secondary-btn" style="font-size: 12px;">Remove from Team</button>` :
-                        `<button onclick="showTeamSelector('${player.id}')" class="primary-btn" style="font-size: 12px;">Add to Team</button>`
-                    }
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-function generateTeamsList() {
-    if (teams.length === 0) {
-        return '<div style="text-align: center; color: #666; padding: 20px;">No teams created yet. Click "Create New Team" to get started!</div>';
-    }
-    
-    return teams.map(team => {
-        const teamMembers = team.members.map(playerId => {
-            const player = players.find(p => p.id === playerId);
-            return player ? `<span class="team-member" style="border-left-color: ${player.color.value}">${player.name}</span>` : '';
-        }).join('');
-        
-        return `
-            <div class="team-card">
-                <div class="team-header-card">
-                    <input type="text" class="team-name-input" value="${team.name}" 
-                           onchange="updateTeamName('${team.id}', this.value)">
-                    <button onclick="deleteTeam('${team.id}')" class="delete-team-btn">🗑️</button>
-                </div>
-                
-                <div class="team-members">
-                    ${teamMembers || '<em style="color: #666;">No members yet</em>'}
-                </div>
-                
-                <div style="margin-top: 10px; font-size: 0.9em; color: #666;">
-                    Members: ${team.members.length} | Total Score: ${calculateTeamScore(team.id)}
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-function updatePlayerName(playerId, newName) {
-    const player = players.find(p => p.id === playerId);
-    if (player) {
-        player.name = newName;
-        console.log(`Updated player ${playerId} name to: ${newName}`);
-    }
-}
-
-function updatePlayerColor(playerId, colorValue) {
-    const player = players.find(p => p.id === playerId);
-    const color = playerColors.find(c => c.value === colorValue);
-    if (player && color) {
-        player.color = color;
-        console.log(`Updated player ${playerId} color to: ${color.name}`);
-        
-        // Refresh the display
-        const playersGrid = document.getElementById('playersGrid');
-        if (playersGrid) {
-            playersGrid.innerHTML = generatePlayerSetupTiles();
-        }
-    }
-}
-
-function createNewTeam() {
-    const teamName = prompt('Enter team name:');
-    if (teamName && teamName.trim()) {
-        const teamId = `team${teams.length + 1}`;
-        teams.push({
-            id: teamId,
-            name: teamName.trim(),
-            members: [],
-            color: playerColors[teams.length % playerColors.length]
-        });
-        
-        console.log('Created new team:', teamName);
-        refreshTeamSetup();
-    }
-}
-
-function deleteTeam(teamId) {
-    if (confirm('Are you sure you want to delete this team?')) {
-        // Remove players from team
-        const team = teams.find(t => t.id === teamId);
-        if (team) {
-            team.members.forEach(playerId => {
-                const player = players.find(p => p.id === playerId);
-                if (player) {
-                    player.teamId = null;
-                }
-            });
-        }
-        
-        // Remove team
-        teams = teams.filter(t => t.id !== teamId);
-        console.log('Deleted team:', teamId);
-        refreshTeamSetup();
-    }
-}
-
-function updateTeamName(teamId, newName) {
-    const team = teams.find(t => t.id === teamId);
-    if (team) {
-        team.name = newName;
-        console.log(`Updated team ${teamId} name to: ${newName}`);
-    }
-}
-
-function showTeamSelector(playerId) {
-    if (teams.length === 0) {
-        alert('Please create a team first!');
-        return;
-    }
-    
-    const teamOptions = teams.map(team => `${team.name} (${team.members.length} members)`);
-    const selectedIndex = prompt(`Select a team for this player:\n\n${teamOptions.map((option, index) => `${index + 1}. ${option}`).join('\n')}\n\nEnter team number (1-${teams.length}):`);
-    
-    if (selectedIndex && !isNaN(selectedIndex)) {
-        const teamIndex = parseInt(selectedIndex) - 1;
-        if (teamIndex >= 0 && teamIndex < teams.length) {
-            addPlayerToTeam(playerId, teams[teamIndex].id);
-        }
-    }
-}
-
-function addPlayerToTeam(playerId, teamId) {
-    const player = players.find(p => p.id === playerId);
-    const team = teams.find(t => t.id === teamId);
-    
-    if (player && team) {
-        // Remove from current team if any
-        if (player.teamId) {
-            removeFromTeam(playerId);
-        }
-        
-        // Add to new team
-        player.teamId = teamId;
-        team.members.push(playerId);
-        
-        console.log(`Added player ${playerId} to team ${teamId}`);
-        refreshTeamSetup();
-    }
-}
-
-function removeFromTeam(playerId) {
-    const player = players.find(p => p.id === playerId);
-    if (player && player.teamId) {
-        const team = teams.find(t => t.id === player.teamId);
-        if (team) {
-            team.members = team.members.filter(id => id !== playerId);
-        }
-        player.teamId = null;
-        
-        console.log(`Removed player ${playerId} from team`);
-        refreshTeamSetup();
-    }
-}
-
-function clearAllTeams() {
-    if (confirm('Are you sure you want to clear all teams?')) {
-        // Remove all players from teams
-        players.forEach(player => {
-            player.teamId = null;
-        });
-        
-        // Clear teams array
-        teams = [];
-        
-        console.log('Cleared all teams');
-        refreshTeamSetup();
-    }
-}
-
-function calculateTeamScore(teamId) {
-    const team = teams.find(t => t.id === teamId);
-    if (!team) return 0;
-    
-    return team.members.reduce((total, playerId) => {
-        const player = players.find(p => p.id === playerId);
-        return total + (player ? player.score : 0);
-    }, 0);
-}
-
-function refreshTeamSetup() {
-    const playersGrid = document.getElementById('playersGrid');
-    const teamsList = document.getElementById('teamsList');
-    
-    if (playersGrid) {
-        playersGrid.innerHTML = generatePlayerSetupTiles();
-    }
-    
-    if (teamsList) {
-        teamsList.innerHTML = generateTeamsList();
-    }
-}
-
-function finishTeamSetup() {
-    // Validate teams (must have 2+ members)
-    const invalidTeams = teams.filter(team => team.members.length < 2);
-    if (invalidTeams.length > 0) {
-        alert(`Teams must have at least 2 members. Please fix: ${invalidTeams.map(t => t.name).join(', ')}`);
-        return;
-    }
-    
-    currentSession.hasTeams = teams.length > 0;
-    console.log('Team setup finished. Teams:', teams);
-    
-    startScoring();
-}
-
-function startScoring() {
-    console.log('Starting scoring interface...');
-    isHost = true;
-    showScorekeeperInterface();
-}
-
-function showScorekeeperInterface() {
-    document.body.innerHTML = `
-        <div class="scoring-interface">
-            <div class="scoring-header">
-                <h2>🎮 ${currentSession.name}</h2>
-                <div class="session-info">
-                    <span class="session-code">Session: ${currentSession.code}</span>
-                    <span class="target-info">Target: ${currentSession.targetScore}</span>
-                    ${currentSession.hasTeams ? '<span class="team-mode">👥 Team Mode</span>' : ''}
-                </div>
-                ${currentSession.gameEnded ? `<div class="game-ended">🏆 Game Won by ${currentSession.winner}!</div>` : ''}
-            </div>
-            
-            ${currentSession.hasTeams ? generateTeamScoreboard() : ''}
-            
-            <div class="players-list">
-                ${generateHostPlayerList()}
-            </div>
-            
-            <div class="scoring-actions">
-                <button onclick="showSessionCode()" class="action-btn">📱 Share Code</button>
-                <button onclick="generateReport()" class="action-btn">📊 View Report</button>
-                <button onclick="resetAllScores()" class="action-btn">🔄 Reset Scores</button>
-                ${currentSession.hasTeams ? '<button onclick="setupTeams()" class="action-btn">👥 Edit Teams</button>' : ''}
-                <button onclick="goHome()" class="action-btn">🏠 End Game</button>
-            </div>
-        </div>
-        
-        <!-- Fixed Footer -->
-        <div class="fixed-footer">
-            © 2025 Ken Kapptie | For educational use only | All rights reserved | <a href="#" onclick="alert('More tools coming soon!')">More tools like this</a>
-        </div>
-        
-        <style>
-            .scoring-interface {
-                max-width: 1000px;
-                margin: 0 auto;
-                padding: 20px;
-            }
-            
-            .scoring-header {
-                text-align: center;
-                margin-bottom: 30px;
-                padding: 20px;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                border-radius: 10px;
-            }
-            
-            .session-info {
-                display: flex;
-                justify-content: center;
-                gap: 20px;
-                margin-top: 10px;
-                flex-wrap: wrap;
-            }
-            
-            .session-info span {
-                background: rgba(255,255,255,0.2);
-                padding: 5px 12px;
-                border-radius: 15px;
-                font-size: 0.9em;
-            }
-            
-            .team-mode {
-                background: rgba(76, 175, 80, 0.8) !important;
-            }
-            
-            .game-ended {
-                background: #4CAF50;
-                color: white;
-                padding: 15px;
-                border-radius: 8px;
-                margin-top: 15px;
-                font-size: 1.2em;
-                font-weight: bold;
-            }
-            
-            .team-scoreboard {
-                background: #f8f9fa;
-                padding: 20px;
-                border-radius: 10px;
-                margin-bottom: 30px;
-            }
-            
-            .team-scoreboard h3 {
-                text-align: center;
-                margin-bottom: 20px;
-                color: #333;
-            }
-            
-            .teams-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                gap: 15px;
-            }
-            
-            .team-score-card {
-                background: white;
-                border: 3px solid;
-                border-radius: 10px;
-                padding: 15px;
-                text-align: center;
-                position: relative;
-            }
-            
-            .team-score-card.winning {
-                border-color: #FFD700;
-                background: #FFFACD;
-            }
-            
-            .team-name {
-                font-size: 1.2em;
-                font-weight: bold;
-                margin-bottom: 10px;
-            }
-            
-            .team-total-score {
-                font-size: 2em;
-                font-weight: bold;
-                color: #667eea;
-                margin-bottom: 10px;
-            }
-            
-            .team-members-list {
-                font-size: 0.9em;
-                color: #666;
-            }
-            
-            .players-list {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-                gap: 20px;
-                margin-bottom: 30px;
-            }
-            
-            .player-card {
-                background: white;
-                border: 2px solid #ddd;
-                border-radius: 10px;
-                padding: 20px;
-                text-align: center;
-                box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-                position: relative;
-                border-left: 6px solid;
-            }
-            
-            .player-card.assigned {
-                border-color: #4CAF50;
-                background: #f8fff8;
-            }
-            
-            .player-card.winner {
-                border-color: #FFD700;
-                background: #FFFACD;
-            }
-            
-            .player-status {
-                position: absolute;
-                top: -8px;
-                right: -8px;
-                padding: 4px 8px;
-                border-radius: 12px;
-                font-size: 0.7em;
-                font-weight: bold;
-            }
-            
-            .status-assigned {
-                background: #4CAF50;
-                color: white;
-            }
-            
-            .status-waiting {
-                background: #FF9800;
-                color: white;
-            }
-            
-            .winner-badge {
-                background: #FFD700;
-                color: #333;
-            }
-            
-            .team-badge {
-                position: absolute;
-                top: -8px;
-                left: -8px;
-                padding: 4px 8px;
-                border-radius: 12px;
-                font-size: 0.7em;
-                font-weight: bold;
-                background: #2196F3;
-                color: white;
-            }
-            
-            .player-name {
-                font-size: 1.2em;
-                font-weight: bold;
-                margin-bottom: 15px;
-                background: none;
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                width: 100%;
-                text-align: center;
-                cursor: text;
-                padding: 8px;
-            }
-            
-            .player-name:focus {
-                outline: 2px solid #4CAF50;
-                border-color: #4CAF50;
-            }
-            
-            .player-score {
-                font-size: 2.5em;
-                font-weight: bold;
-                color: #667eea;
-                margin-bottom: 20px;
-            }
-            
-            .score-controls {
-                display: grid;
-                grid-template-columns: repeat(5, 1fr);
-                gap: 8px;
-                margin-bottom: 15px;
-            }
-            
-            .score-btn {
-                background: #f8f9fa;
-                border: 1px solid #ddd;
-                border-radius: 6px;
-                padding: 8px 4px;
-                cursor: pointer;
-                font-size: 0.9em;
-                font-weight: bold;
-                transition: all 0.2s;
-            }
-            
-            .score-btn:hover {
-                background: #e9ecef;
-                transform: translateY(-1px);
-            }
-            
-            .score-btn.negative {
-                color: #dc3545;
-            }
-            
-            .score-btn.positive {
-                color: #28a745;
-            }
-            
-            .custom-score {
-                display: flex;
-                gap: 5px;
-                margin-top: 10px;
-            }
-            
-            .custom-input {
-                flex: 1;
-                padding: 8px;
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                text-align: center;
-            }
-            
-            .custom-btn {
-                background: #667eea;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                padding: 8px 12px;
-                cursor: pointer;
-                font-weight: bold;
-            }
-            
-            .custom-btn:hover {
-                background: #5a67d8;
-            }
-            
-            .scoring-actions {
-                text-align: center;
-                margin: 30px 0 60px 0;
-                padding: 20px;
-                background: #f8f9fa;
-                border-radius: 10px;
-                position: relative;
-                z-index: 100;
-                clear: both;
-            }
-            
-            .action-btn {
-                background: #2196F3;
-                color: white;
-                border: none;
-                padding: 12px 24px;
-                border-radius: 8px;
-                cursor: pointer;
-                font-size: 16px;
-                margin: 5px 10px;
-                display: inline-block;
-                position: relative;
-                z-index: 101;
-            }
-            
-            .action-btn:hover {
-                background: #1976D2;
-            }
-            
-            /* Fixed Footer */
-            .fixed-footer {
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                background: #333;
-                color: #fff;
-                text-align: center;
-                padding: 8px 10px;
-                font-size: 12px;
-                z-index: 1000;
-                border-top: 1px solid #555;
-                box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
-            }
-            
-            .fixed-footer a {
-                color: #4CAF50;
-                text-decoration: none;
-            }
-            
-            .fixed-footer a:hover {
-                text-decoration: underline;
-            }
-            
-            body {
-                padding-bottom: 50px;
-            }
-            
-            @media (max-width: 768px) {
-                .players-list {
-                    grid-template-columns: 1fr;
-                }
-                
-                .teams-grid {
-                    grid-template-columns: 1fr;
-                }
-                
-                .session-info {
-                    flex-direction: column;
-                    gap: 10px;
-                }
-                
-                .scoring-actions {
-                    flex-direction: column;
-                    align-items: center;
-                }
-                
-                .action-btn {
-                    width: 100%;
-                    max-width: 300px;
-                    margin: 5px 0;
-                }
-            }
-        </style>
-    `;
-    
-    console.log('Scorekeeper interface created');
-}
-
-function generateTeamScoreboard() {
-    if (!currentSession.hasTeams || teams.length === 0) return '';
-    
-    const sortedTeams = teams.map(team => ({
-        ...team,
-        totalScore: calculateTeamScore(team.id)
-    })).sort((a, b) => b.totalScore - a.totalScore);
-    
-    const winningScore = sortedTeams[0]?.totalScore || 0;
-    
-    return `
-        <div class="team-scoreboard">
-            <h3>🏆 Team Leaderboard</h3>
-            <div class="teams-grid">
-                ${sortedTeams.map(team => `
-                    <div class="team-score-card ${team.totalScore === winningScore && winningScore > 0 ? 'winning' : ''}" 
-                         style="border-color: ${team.color.value}">
-                        <div class="team-name">${team.name}</div>
-                        <div class="team-total-score">${team.totalScore}</div>
-                        <div class="team-members-list">
-                            ${team.members.map(playerId => {
-                                const player = players.find(p => p.id === playerId);
-                                return player ? `${player.name} (${player.score})` : '';
-                            }).filter(Boolean).join(', ')}
-                        </div>
-                    </div>
-                `).join('')}
-            </div>
-        </div>
-    `;
-}
-
-function generateHostPlayerList() {
-    return players.map(player => {
-        const isWinner = currentSession.gameEnded && currentSession.winner === player.name;
-        const hasReachedTarget = player.score >= currentSession.targetScore;
-        const team = teams.find(t => t.members.includes(player.id));
-        
-        return `
-            <div class="player-card ${player.isAssigned ? 'assigned' : ''} ${isWinner ? 'winner' : ''}" 
-                 data-player-id="${player.id}"
-                 style="border-left-color: ${player.color.value}; background-color: ${player.color.light}">
-                
-                ${isWinner ? '<div class="winner-badge">🏆</div>' : ''}
-                ${hasReachedTarget && !currentSession.gameEnded ? '<div class="winner-badge">🎯</div>' : ''}
-                ${team ? `<div class="team-badge">${team.name}</div>` : ''}
-                ${!player.isAssigned ? '<div class="status-waiting">Waiting</div>' : '<div class="status-assigned">Joined</div>'}
-                
-                <input type="text" class="player-name" value="${player.name}" 
-                       onchange="updatePlayerName('${player.id}', this.value)" 
-                       ${!isHost ? 'readonly' : ''}>
-                
-                <div class="player-score">${player.score}</div>
-                
-                <div class="score-controls">
-                    <button class="score-btn negative" onclick="changeScore('${player.id}', -10)">-10</button>
-                    <button class="score-btn negative" onclick="changeScore('${player.id}', -5)">-5</button>
-                    <button class="score-btn negative" onclick="changeScore('${player.id}', -1)">-1</button>
-                    <button class="score-btn positive" onclick="changeScore('${player.id}', 1)">+1</button>
-                    <button class="score-btn positive" onclick="changeScore('${player.id}', 5)">+5</button>
-                </div>
-                
-                <div class="custom-score">
-                    <input type="number" class="custom-input" id="custom-${player.id}" placeholder="Amount" 
-                           step="${currentSession.allowDecimals ? '0.1' : '1'}">
-                    <button class="custom-btn" onclick="applyCustomScore('${player.id}', false)">+</button>
-                    <button class="custom-btn" onclick="applyCustomScore('${player.id}', true)">-</button>
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-function changeScore(playerId, amount) {
-    const player = players.find(p => p.id === playerId);
-    if (!player) return;
-    
-    const oldScore = player.score;
-    player.score += amount;
-    
-    // Record score change
-    scoreHistory.push({
-        playerId: playerId,
-        playerName: player.name,
-        change: amount,
-        oldScore: oldScore,
-        newScore: player.score,
-        timestamp: new Date().toISOString()
-    });
-    
-    console.log(`Player ${playerId} score changed by ${amount} to ${player.score}`);
-    
-    // Check for win condition
-    checkWinCondition();
-    
-    // Update display
-    updatePlayerDisplay(playerId);
-    
-    // Update team scoreboard if teams exist
-    if (currentSession.hasTeams) {
-        updateTeamScoreboard();
-    }
-    
-    // Save to Firebase
-    saveToFirebase();
-}
-
-function applyCustomScore(playerId, isNegative) {
-    const input = document.getElementById(`custom-${playerId}`);
-    const amount = parseFloat(input.value);
-    
-    if (isNaN(amount) || amount === 0) {
-        alert('Please enter a valid number');
-        return;
-    }
-    
-    const finalAmount = isNegative ? -Math.abs(amount) : Math.abs(amount);
-    changeScore(playerId, finalAmount);
-    
-    input.value = '';
-}
-
-function updatePlayerDisplay(playerId) {
-    const playerCard = document.querySelector(`[data-player-id="${playerId}"]`);
-    if (playerCard) {
-        const scoreElement = playerCard.querySelector('.player-score');
-        const player = players.find(p => p.id === playerId);
-        if (scoreElement && player) {
-            scoreElement.textContent = player.score;
-        }
-    }
-}
-
-function updateTeamScoreboard() {
-    const teamScoreboard = document.querySelector('.team-scoreboard');
-    if (teamScoreboard && currentSession.hasTeams) {
-        teamScoreboard.innerHTML = `
-            <h3>🏆 Team Leaderboard</h3>
-            ${generateTeamScoreboard().replace('<div class="team-scoreboard">', '').replace('</div>', '')}
-        `;
-    }
-}
-
-function checkWinCondition() {
-    if (currentSession.gameEnded) return;
-    
-    const winners = players.filter(p => p.score >= currentSession.targetScore);
-    if (winners.length > 0) {
-        if (!currentSession.playAfterTarget) {
-            // Game ends immediately
-            const winner = winners.reduce((prev, current) => 
-                (prev.score > current.score) ? prev : current
-            );
-            
-            currentSession.gameEnded = true;
-            currentSession.winner = winner.name;
-            
-            alert(`🏆 Game Over! ${winner.name} wins with ${winner.score} points!`);
-            
-            // Update header
-            const header = document.querySelector('.scoring-header');
-            if (header && !header.querySelector('.game-ended')) {
-                header.innerHTML += `<div class="game-ended">🏆 Game Won by ${winner.name}!</div>`;
-            }
-        } else {
-            // Just show target reached notification
-            winners.forEach(winner => {
-                if (!winner.targetNotified) {
-                    alert(`🎯 ${winner.name} has reached the target score of ${currentSession.targetScore}!`);
-                    winner.targetNotified = true;
-                }
-            });
-        }
-    }
-}
-
-function handleJoinSession(e) {
-    e.preventDefault();
-    console.log('Join session form submitted');
-    
-    const form = e.target;
-    const inputs = form.querySelectorAll('input[type="text"]');
-    
-    let joinCode = '';
-    let playerName = '';
-    
-    // Try to find the fields by looking at input values and placeholders
-    inputs.forEach(input => {
-        const value = (input.value || '').toString().trim();
-        const placeholder = (input.placeholder || '').toLowerCase();
-        
-        if (value.length === 6 && /^[A-Z0-9]+$/.test(value.toUpperCase())) {
-            joinCode = value.toUpperCase();
-        } else if (value.length > 0 && (placeholder.includes('name') || placeholder.includes('player'))) {
-            playerName = value;
-        } else if (value.length > 0 && !joinCode) {
-            joinCode = value.toUpperCase();
-        } else if (value.length > 0 && !playerName) {
-            playerName = value;
-        }
-    });
-    
-    console.log('Join attempt:', { joinCode, playerName });
-    
-    if (!joinCode || !playerName) {
-        alert('Please enter both session code and your name');
-        return;
-    }
-    
-    joinSession(joinCode, playerName);
-}
-
-function joinSession(sessionCode, playerName) {
-    console.log(`Attempting to join session ${sessionCode} as ${playerName}`);
-    
-    if (typeof database !== 'undefined' && database) {
-        const sessionRef = database.ref(`sessions/${sessionCode}`);
-        sessionRef.once('value').then(snapshot => {
-            if (snapshot.exists()) {
-                const sessionData = snapshot.val();
-                currentSession = sessionData.metadata;
-                players = Object.values(sessionData.players || {});
-                teams = Object.values(sessionData.teams || {});
-                scoreHistory = sessionData.scoreHistory || [];
-                
-                // Find an unassigned player slot
-                const availablePlayer = players.find(p => !p.isAssigned);
-                if (availablePlayer) {
-                    availablePlayer.isAssigned = true;
-                    availablePlayer.name = playerName;
-                    currentPlayerId = availablePlayer.id;
-                    isHost = false;
-                    
-                    // Update in Firebase
-                    sessionRef.child(`players/${availablePlayer.id}`).update({
-                        isAssigned: true,
-                        name: playerName
-                    });
-                    
-                    console.log(`Joined as player: ${availablePlayer.id}`);
-                    showPlayerView(availablePlayer.id);
-                } else {
-                    alert('Session is full! All player slots are taken.');
-                }
-            } else {
-                alert('Session not found! Please check the code and try again.');
-            }
-        }).catch(error => {
-            console.error('Error joining session:', error);
-            alert('Error joining session. Please try again.');
-        });
-    } else {
-        alert('Unable to connect to game server. Please try again later.');
-    }
-}
-
-function showPlayerView(playerId) {
-    document.body.innerHTML = `
-        <div class="player-view">
-            <div class="player-header">
-                <h2>🎮 ${currentSession.name}</h2>
-                <p><strong>Session: ${currentSession.code}</strong> | ${currentSession.name}<br>Target Score: ${currentSession.targetScore} | Scores update automatically</p>
-                <div class="player-badge">You are: <strong>${players.find(p => p.id === playerId)?.name}</strong></div>
-                ${currentSession.gameEnded ? `<div class="game-ended">🏆 Game Won by ${currentSession.winner}!</div>` : ''}
-            </div>
-            
-            ${currentSession.hasTeams ? generatePlayerTeamView() : ''}
-            
-            <div class="players-grid">
-                ${generatePlayerViewTiles(playerId)}
-            </div>
-            
-            <div class="player-actions">
-                <button onclick="editMyName('${playerId}')" class="action-btn">✏️ Edit My Name</button>
-                <button onclick="generateReport()" class="action-btn">📊 View Report</button>
-                <button onclick="goHome()" class="action-btn">🚪 Leave Session</button>
-            </div>
-            
-            <div class="last-updated">
-                <small>Last updated: <span id="lastUpdated">${new Date().toLocaleTimeString()}</span></small>
-            </div>
-        </div>
-        
-        <!-- Fixed Footer -->
-        <div class="fixed-footer">
-            © 2025 Ken Kapptie | For educational use only | All rights reserved | <a href="#" onclick="alert('More tools coming soon!')">More tools like this</a>
-        </div>
-        
-        <style>
-            .player-view {
-                max-width: 1000px;
-                margin: 0 auto;
-                padding: 20px;
-            }
-            
-            .player-header {
-                text-align: center;
-                margin-bottom: 30px;
-                padding: 20px;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                border-radius: 10px;
-            }
-            
-            .player-badge {
-                background: rgba(255,255,255,0.2);
-                padding: 10px 20px;
-                border-radius: 20px;
-                margin-top: 15px;
-                display: inline-block;
-            }
-            
-            .game-ended {
-                background: #4CAF50;
-                color: white;
-                padding: 15px;
-                border-radius: 8px;
-                margin-top: 15px;
-                font-size: 1.2em;
-                font-weight: bold;
-            }
-            
-            .player-team-view {
-                background: #f8f9fa;
-                padding: 20px;
-                border-radius: 10px;
-                margin-bottom: 30px;
-            }
-            
-            .players-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                gap: 15px;
-                margin-bottom: 30px;
-            }
-            
-            .player-tile {
-                background: white;
-                border: 2px solid #ddd;
-                border-radius: 10px;
-                padding: 15px;
-                text-align: center;
-                box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-                position: relative;
-                border-left: 6px solid;
-                transition: transform 0.2s;
-            }
-            
-            .player-tile:hover {
-                transform: translateY(-2px);
-            }
-            
-            .player-tile.current-player {
-                border-color: #4CAF50;
-                background: #f8fff8;
-            }
-            
-            .player-tile.winner {
-                border-color: #FFD700;
-                background: #FFFACD;
-            }
-            
-            .winner-badge {
-                position: absolute;
-                top: -8px;
-                right: -8px;
-                background: #FFD700;
-                color: #333;
-                padding: 4px 8px;
-                border-radius: 12px;
-                font-size: 0.7em;
-                font-weight: bold;
-            }
-            
-            .target-badge {
-                position: absolute;
-                top: -8px;
-                left: -8px;
-                background: #FF9800;
-                color: white;
-                padding: 4px 8px;
-                border-radius: 12px;
-                font-size: 0.7em;
-                font-weight: bold;
-            }
-            
-            .team-badge {
-                position: absolute;
-                top: -8px;
-                left: 50%;
-                transform: translateX(-50%);
-                background: #2196F3;
-                color: white;
-                padding: 4px 8px;
-                border-radius: 12px;
-                font-size: 0.7em;
-                font-weight: bold;
-            }
-            
-            .player-name {
-                font-size: 1.1em;
-                font-weight: bold;
-                margin-bottom: 10px;
-                color: #333;
-            }
-            
-            .current-player-badge {
-                background: #4CAF50;
-                color: white;
-                padding: 2px 8px;
-                border-radius: 10px;
-                font-size: 0.8em;
-                margin-left: 8px;
-            }
-            
-            .player-score {
-                font-size: 2em;
-                font-weight: bold;
-                color: #667eea;
-            }
-            
-            .player-actions {
-                text-align: center;
-                margin: 30px 0;
-                padding: 20px;
-                background: #f8f9fa;
-                border-radius: 10px;
-                position: relative;
-                z-index: 100;
-                clear: both;
-            }
-            
-            .action-btn {
-                background: #2196F3;
-                color: white;
-                border: none;
-                padding: 12px 24px;
-                border-radius: 8px;
-                cursor: pointer;
-                font-size: 16px;
-                margin: 5px 10px;
-                display: inline-block;
-                position: relative;
-                z-index: 101;
-            }
-            
-            .action-btn:hover {
-                background: #1976D2;
-            }
-            
-            .last-updated {
-                text-align: center;
-                color: #666;
-                margin-bottom: 80px;
-            }
-            
-            /* Fixed Footer */
-            .fixed-footer {
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                background: #333;
-                color: #fff;
-                text-align: center;
-                padding: 8px 10px;
-                font-size: 12px;
-                z-index: 1000;
-                border-top: 1px solid #555;
-                box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
-            }
-            
-            .fixed-footer a {
-                color: #4CAF50;
-                text-decoration: none;
-            }
-            
-            .fixed-footer a:hover {
-                text-decoration: underline;
-            }
-            
-            body {
-                padding-bottom: 50px;
-            }
-            
-            .player-view, .scoring-interface, .session-success {
-                margin-bottom: 60px;
-            }
-            
-            @media (max-width: 768px) {
-                .players-grid {
-                    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-                }
-                
-                .player-actions {
-                    flex-direction: column;
-                    align-items: center;
-                }
-                
-                .action-btn {
-                    width: 100%;
-                    max-width: 300px;
-                    margin: 5px 0;
-                }
-            }
-        </style>
-    `;
-    
-    // Listen for real-time updates
-    if (typeof database !== 'undefined' && database && currentSession) {
-        const sessionRef = database.ref(`sessions/${currentSession.code}`);
-        sessionRef.on('value', (snapshot) => {
-            if (snapshot.exists()) {
-                const sessionData = snapshot.val();
-                const updatedPlayers = Object.values(sessionData.players || {});
-                const updatedSession = sessionData.metadata || currentSession;
-                const updatedTeams = Object.values(sessionData.teams || {});
-                
-                players = updatedPlayers;
-                currentSession = updatedSession;
-                teams = updatedTeams;
-                scoreHistory = sessionData.scoreHistory || scoreHistory;
-                
-                // Update the display
-                const playersGrid = document.querySelector('.players-grid');
-                if (playersGrid) {
-                    playersGrid.innerHTML = generatePlayerViewTiles(playerId);
-                }
-                
-                // Update team view if exists
-                const teamView = document.querySelector('.player-team-view');
-                if (teamView && currentSession.hasTeams) {
-                    teamView.innerHTML = generatePlayerTeamView().replace('<div class="player-team-view">', '').replace('</div>', '');
-                }
-                
-                // Update player badge with current player info
-                const playerBadge = document.querySelector('.player-badge');
-                if (playerBadge) {
-                    const currentPlayer = players.find(p => p.id === playerId);
-                    if (currentPlayer) {
-                        playerBadge.innerHTML = `You are: <strong>${currentPlayer.name}</strong>`;
-                    }
-                }
-                
-                // Update header info
-                const playerHeader = document.querySelector('.player-header');
-                if (playerHeader) {
-                    // Update session info
-                    const sessionInfo = playerHeader.querySelector('p');
-                    if (sessionInfo) {
-                        sessionInfo.innerHTML = `<strong>Session: ${currentSession.code}</strong> | ${currentSession.name}<br>Target Score: ${currentSession.targetScore} | Scores update automatically`;
-                    }
-                    
-                    // Add game ended message if needed
-                    if (currentSession.gameEnded) {
-                        const existingGameEnded = playerHeader.querySelector('.game-ended');
-                        if (!existingGameEnded) {
-                            playerHeader.innerHTML += `<div class="game-ended">🏆 Game Won by ${currentSession.winner}!</div>`;
-                        }
-                    }
-                }
-                
-                // Update timestamp
-                const lastUpdated = document.getElementById('lastUpdated');
-                if (lastUpdated) {
-                    lastUpdated.textContent = new Date().toLocaleTimeString();
-                }
-                
-                console.log('Player view updated - Players:', players.map(p => `${p.name} (${p.isAssigned ? 'Joined' : 'Waiting'})`));
-            }
-        });
-    }
-}
-
-function generatePlayerTeamView() {
-    if (!currentSession.hasTeams || teams.length === 0) return '';
-    
-    const sortedTeams = teams.map(team => ({
-        ...team,
-        totalScore: calculateTeamScore(team.id)
-    })).sort((a, b) => b.totalScore - a.totalScore);
-    
-    return `
-        <div class="player-team-view">
-            <h3>👥 Team Standings</h3>
-            <div class="teams-grid">
-                ${sortedTeams.map(team => `
-                    <div class="team-score-card" style="border-color: ${team.color.value}">
-                        <div class="team-name">${team.name}</div>
-                        <div class="team-total-score">${team.totalScore}</div>
-                        <div class="team-members-list">
-                            ${team.members.map(playerId => {
-                                const player = players.find(p => p.id === playerId);
-                                return player ? `${player.name} (${player.score})` : '';
-                            }).filter(Boolean).join(', ')}
-                        </div>
-                    </div>
-                `).join('')}
-            </div>
-        </div>
-    `;
-}
-
-function generatePlayerViewTiles(currentPlayerId) {
-    return players.map(player => {
-        const isCurrentPlayer = player.id === currentPlayerId;
-        const isWinner = currentSession.gameEnded && currentSession.winner === player.name;
-        const hasReachedTarget = player.score >= currentSession.targetScore;
-        const team = teams.find(t => t.members.includes(player.id));
-        
-        return `
-            <div class="player-tile ${isCurrentPlayer ? 'current-player' : ''} ${isWinner ? 'winner' : ''}" 
-                 data-player-id="${player.id}"
-                 style="border-left-color: ${player.color.value}; background-color: ${player.color.light}">
-                
-                ${isWinner ? '<div class="winner-badge">🏆</div>' : ''}
-                ${hasReachedTarget && !currentSession.gameEnded ? '<div class="target-badge">🎯</div>' : ''}
-                ${team ? `<div class="team-badge">${team.name}</div>` : ''}
-                
-                <div class="player-name">
-                    ${player.name}
-                    ${isCurrentPlayer ? '<span class="current-player-badge">You</span>' : ''}
-                    ${!player.isAssigned ? ' (Waiting)' : ''}
-                </div>
-                <div class="player-score">${player.score}</div>
-            </div>
-        `;
-    }).join('');
-}
-
-function editMyName(playerId) {
-    const currentPlayer = players.find(p => p.id === playerId);
-    if (!currentPlayer) return;
-    
-    const newName = prompt(`Edit your name:`, currentPlayer.name);
-    if (newName && newName.trim() && newName.trim() !== currentPlayer.name) {
-        currentPlayer.name = newName.trim();
-        
-        // Update in Firebase
-        if (typeof database !== 'undefined' && database && currentSession) {
-            const sessionRef = database.ref(`sessions/${currentSession.code}`);
-            sessionRef.child(`players/${playerId}`).update({
-                name: newName.trim()
-            });
-        }
-        
-        // Update local display
-        const playerBadge = document.querySelector('.player-badge');
-        if (playerBadge) {
-            playerBadge.innerHTML = `You are: <strong>${newName.trim()}</strong>`;
-        }
-        
-        console.log(`Updated player ${playerId} name to: ${newName.trim()}`);
-    }
-}
-
-// Utility functions
 function generateSessionCode() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let result = '';
@@ -2007,275 +71,1103 @@ function generateSessionCode() {
     return result;
 }
 
-function copySessionCode(code) {
-    navigator.clipboard.writeText(code).then(() => {
-        alert(`Session code ${code} copied to clipboard!`);
-    }).catch(() => {
-        prompt('Copy this session code:', code);
+function getRandomColor() {
+    return COLOR_PALETTE[Math.floor(Math.random() * COLOR_PALETTE.length)];
+}
+
+function updateConnectionStatus(isConnected) {
+    firebaseConnectionStatus = isConnected;
+    const statusElement = document.getElementById('connectionStatus');
+    if (statusElement) {
+        statusElement.textContent = isConnected ? 'Online' : 'Offline';
+        statusElement.className = isConnected ? 'connection-status status-online' : 'connection-status status-offline';
+    }
+    console.log(`Updating connection status: ${isConnected}`);
+}
+
+// Firebase Initialization and Connection Monitoring
+async function initializeFirebaseWithRetry(retries = 10, delay = 1000) {
+    console.log('Waiting for Firebase with retry logic...');
+    for (let i = 1; i <= retries; i++) {
+        console.log(`Firebase check attempt ${i}/${retries}`);
+        if (typeof firebase !== 'undefined' && firebase.app && firebase.database) {
+            console.log('Firebase found! Setting up connection monitoring...');
+            try {
+                db = firebase.database();
+                firebaseInitialized = true;
+                setupFirebaseConnectionMonitoring();
+                console.log('Firebase is ready for operations!');
+                return;
+            } catch (error) {
+                console.error('Error initializing Firebase:', error);
+                firebaseInitialized = false;
+            }
+        }
+        await new Promise(resolve => setTimeout(resolve, delay));
+    }
+    console.error('Firebase not available after multiple retries. Running in offline mode.');
+    firebaseInitialized = false;
+}
+
+function setupFirebaseConnectionMonitoring() {
+    console.log('Setting up Firebase connection monitoring...');
+    const connectedRef = db.ref('.info/connected');
+    connectedRef.on('value', snap => {
+        const isConnected = snap.val();
+        console.log('Firebase connection status changed:', isConnected);
+        updateConnectionStatus(isConnected);
     });
 }
 
-function showSessionCode() {
-    alert(`Session Code: ${currentSession.code}\n\nShare this code with other players so they can join your game!`);
-}
+// Session Management
+async function handleCreateSession(event) {
+    event.preventDefault();
+    const createButton = document.getElementById('createSessionButton');
+    if (createButton) {
+        createButton.disabled = true;
+        createButton.textContent = 'Creating...';
+    }
 
-function resetAllScores() {
-    if (confirm('Are you sure you want to reset all scores to the starting score?')) {
-        players.forEach(player => {
-            player.score = currentSession.startingScore;
-        });
-        
-        scoreHistory.push({
-            action: 'reset_all',
-            timestamp: new Date().toISOString()
-        });
-        
-        currentSession.gameEnded = false;
-        currentSession.winner = null;
-        
-        console.log('All scores reset');
-        
-        // Refresh display
-        if (isHost) {
-            showScorekeeperInterface();
+    const sessionNameInput = document.getElementById('sessionName');
+    const playerCountInput = document.getElementById('playerCount');
+    const startingScoreInput = document.getElementById('startingScore');
+    const targetScoreInput = document.getElementById('targetScore');
+    const allowDecimalsCheckbox = document.getElementById('allowDecimals');
+    const playAfterTargetCheckbox = document.getElementById('playAfterTarget');
+
+    const sessionName = sessionNameInput ? sessionNameInput.value.trim() : 'New Session';
+    const playerCount = playerCountInput ? parseInt(playerCountInput.value) : 2;
+    const startingScore = startingScoreInput ? parseFloat(startingScoreInput.value) : 0;
+    const targetScore = targetScoreInput ? parseFloat(targetScoreInput.value) : 500;
+    const allowDecimals = allowDecimalsCheckbox ? allowDecimalsCheckbox.checked : false;
+    const playAfterTarget = playAfterTargetCheckbox ? playAfterTargetCheckbox.checked : false;
+
+    if (!sessionName || playerCount < 1) {
+        showMessage('Please enter a session name and valid player count.', 'error');
+        if (createButton) {
+            createButton.disabled = false;
+            createButton.textContent = 'Create Session';
         }
-        
-        saveToFirebase();
+        return;
+    }
+
+    const sessionCode = generateSessionCode();
+    const players = Array.from({length: playerCount}, (_, i) => ({
+        id: `player${i + 1}`,
+        name: `Player ${i + 1}`,
+        score: startingScore,
+        color: COLOR_PALETTE[i % COLOR_PALETTE.length],
+        history: [{score: startingScore, timestamp: Date.now()}],
+        status: 'waiting'
+    }));
+
+    currentSession = {
+        code: sessionCode,
+        name: sessionName,
+        playerCount: playerCount,
+        startingScore: startingScore,
+        allowDecimals: allowDecimals,
+        targetScore: targetScore,
+        playAfterTarget: playAfterTarget,
+        players: players,
+        createdAt: Date.now(),
+        lastUpdated: Date.now(),
+        hostId: 'host-' + Date.now(),
+        isHost: true,
+        teams: {},
+        spectators: [] // Track spectators
+    };
+
+    console.log('Creating session...');
+    console.log('Generated session code:', sessionCode);
+
+    if (firebaseInitialized && firebaseConnectionStatus) {
+        await saveSessionToFirebase(sessionCode, currentSession);
+        showMessage('Session created and saved online!', 'success');
+    } else {
+        showMessage('Session created locally (offline mode)', 'warning');
+    }
+
+    currentPlayerId = currentSession.players[0].id;
+    currentPlayerName = currentSession.players[0].name;
+    currentPlayerTileColor = currentSession.players[0].color;
+    isSpectator = false;
+
+    showSessionSuccessScreen(sessionCode, sessionName);
+
+    if (createButton) {
+        createButton.disabled = false;
+        createButton.textContent = 'Create Session';
     }
 }
 
-function saveToFirebase() {
-    if (typeof database !== 'undefined' && database && currentSession) {
-        const sessionRef = database.ref(`sessions/${currentSession.code}`);
-        sessionRef.update({
-            metadata: currentSession,
-            players: players.reduce((acc, player) => {
-                acc[player.id] = player;
-                return acc;
-            }, {}),
-            teams: teams.reduce((acc, team) => {
-                acc[team.id] = team;
-                return acc;
-            }, {}),
-            scoreHistory: scoreHistory
+async function saveSessionToFirebase(code, sessionData) {
+    if (!firebaseInitialized || !firebaseConnectionStatus) {
+        console.warn('Firebase not available, cannot save session.');
+        return;
+    }
+    try {
+        await db.ref(`sessions/${code}`).set(sessionData);
+        console.log('Session saved to Firebase successfully');
+    } catch (error) {
+        console.error('Error saving session to Firebase:', error);
+        showMessage('Error saving session to Firebase. Please try again.', 'error');
+    }
+}
+
+async function joinSession(sessionCode, playerName, playerColor, asSpectator = false) {
+    if (!sessionCode || (!playerName && !asSpectator)) {
+        showMessage('Please enter session code and your name.', 'error');
+        return;
+    }
+
+    sessionCode = sessionCode.toUpperCase();
+
+    if (!firebaseInitialized || !firebaseConnectionStatus) {
+        showMessage('Cannot join session - Firebase not connected. Please wait and try again.', 'error');
+        return;
+    }
+
+    try {
+        const snapshot = await db.ref(`sessions/${sessionCode}`).once('value');
+        if (snapshot.exists()) {
+            const sessionData = snapshot.val();
+            currentSession = {...sessionData, isHost: false};
+
+            if (asSpectator) {
+                // Join as spectator
+                isSpectator = true;
+                currentPlayerId = null;
+                currentPlayerName = playerName || 'Spectator';
+                
+                // Add to spectators list
+                if (!currentSession.spectators) currentSession.spectators = [];
+                const spectatorId = 'spectator-' + Date.now();
+                currentSession.spectators.push({
+                    id: spectatorId,
+                    name: currentPlayerName,
+                    joinedAt: Date.now()
+                });
+
+                // Update Firebase with new spectator
+                await db.ref(`sessions/${sessionCode}/spectators`).set(currentSession.spectators);
+
+                setupRealtimeListeners(sessionCode);
+                showMessage(`Joined as spectator in session ${sessionCode}!`, 'success');
+                showPage(PAGE_IDS.SPECTATOR_VIEW);
+                updateSpectatorView();
+            } else {
+                // Join as player
+                isSpectator = false;
+                let assignedPlayer = currentSession.players.find(p => p.status !== 'joined' && p.name.startsWith('Player '));
+                
+                if (assignedPlayer) {
+                    assignedPlayer.name = playerName;
+                    assignedPlayer.color = playerColor;
+                    assignedPlayer.status = 'joined';
+                    
+                    currentPlayerId = assignedPlayer.id;
+                    currentPlayerName = assignedPlayer.name;
+                    currentPlayerTileColor = assignedPlayer.color;
+
+                    await db.ref(`sessions/${sessionCode}`).update({
+                        players: currentSession.players,
+                        lastUpdated: Date.now()
+                    });
+
+                    setupRealtimeListeners(sessionCode);
+                    showMessage(`Joined session ${sessionCode} as ${playerName}!`, 'success');
+                    showPage(PAGE_IDS.PLAYER_VIEW);
+                    updatePlayerView();
+                } else {
+                    showMessage('Session is full. You can join as a spectator instead.', 'error');
+                }
+            }
+        } else {
+            showMessage('Session not found. Please check the code.', 'error');
+        }
+    } catch (error) {
+        console.error('Error joining session:', error);
+        showMessage('Error joining session. Please try again.', 'error');
+    }
+}
+
+function leaveSession() {
+    if (currentSession && currentSession.code) {
+        if (currentSession.isHost) {
+            if (firebaseInitialized && firebaseConnectionStatus) {
+                db.ref(`sessions/${currentSession.code}`).remove()
+                    .then(() => {
+                        console.log('Session deleted from Firebase.');
+                        showMessage('Session ended and deleted.', 'info');
+                    })
+                    .catch(error => {
+                        console.error('Error deleting session:', error);
+                        showMessage('Error deleting session.', 'error');
+                    });
+            }
+        } else if (isSpectator) {
+            // Remove from spectators list
+            if (firebaseInitialized && firebaseConnectionStatus && currentSession.spectators) {
+                const updatedSpectators = currentSession.spectators.filter(s => s.name !== currentPlayerName);
+                db.ref(`sessions/${currentSession.code}/spectators`).set(updatedSpectators);
+            }
+            showMessage('You have left the session.', 'info');
+        } else {
+            // Player leaves
+            if (firebaseInitialized && firebaseConnectionStatus && currentPlayerId) {
+                const playerRef = db.ref(`sessions/${currentSession.code}/players`);
+                playerRef.once('value', snapshot => {
+                    const players = snapshot.val();
+                    const playerIndex = players.findIndex(p => p.id === currentPlayerId);
+                    if (playerIndex !== -1) {
+                        players[playerIndex].status = 'left';
+                        playerRef.set(players);
+                    }
+                });
+            }
+            showMessage('You have left the session.', 'info');
+        }
+    }
+    
+    currentSession = null;
+    currentPlayerId = null;
+    currentPlayerName = "Guest";
+    currentPlayerTileColor = '#007bff';
+    isSpectator = false;
+    
+    if (db && currentSession?.code) {
+        db.ref(`sessions/${currentSession.code}`).off();
+    }
+    showPage(PAGE_IDS.LANDING);
+}
+
+// Real-time Updates
+function setupRealtimeListeners(sessionCode) {
+    if (!firebaseInitialized || !firebaseConnectionStatus) return;
+
+    const sessionRef = db.ref(`sessions/${sessionCode}`);
+    sessionRef.on('value', snapshot => {
+        const updatedSession = snapshot.val();
+        if (updatedSession) {
+            currentSession = {...updatedSession, isHost: currentSession ? currentSession.isHost : false};
+            console.log('Session data updated in real-time:', currentSession);
+
+            // Update appropriate view
+            if (isSpectator) {
+                updateSpectatorView();
+            } else if (document.getElementById(PAGE_IDS.SCOREKEEPER).style.display === 'block') {
+                updateScorekeeperInterface();
+            } else if (document.getElementById(PAGE_IDS.PLAYER_VIEW).style.display === 'block') {
+                updatePlayerView();
+            } else if (document.getElementById(PAGE_IDS.TEAM_SETUP).style.display === 'block') {
+                renderTeamSetup();
+            }
+
+            checkWinCondition();
+        } else {
+            showMessage('The host has ended the session.', 'info');
+            leaveSession();
+        }
+    });
+}
+
+// UI Updates
+function showSessionSuccessScreen(sessionCode, sessionName) {
+    const sessionCodeDisplay = document.getElementById('displaySessionCode');
+    const sessionNameDisplay = document.getElementById('displaySessionName');
+    const copyCodeButton = document.getElementById('copySessionCode');
+    const startScoringButton = document.getElementById('startScoringButton');
+    const setupTeamsButton = document.getElementById('setupTeamsButton');
+
+    if (sessionCodeDisplay) sessionCodeDisplay.textContent = sessionCode;
+    if (sessionNameDisplay) sessionNameDisplay.textContent = sessionName;
+
+    if (copyCodeButton) {
+        copyCodeButton.onclick = () => {
+            navigator.clipboard.writeText(sessionCode).then(() => {
+                showMessage('Session code copied!', 'success');
+            }).catch(err => {
+                console.error('Could not copy text: ', err);
+                showMessage('Failed to copy code.', 'error');
+            });
+        };
+    }
+
+    if (startScoringButton) {
+        startScoringButton.onclick = () => {
+            if (currentSession.isHost) {
+                showPage(PAGE_IDS.SCOREKEEPER);
+                updateScorekeeperInterface();
+            } else {
+                showMessage('Only the host can start scoring.', 'error');
+            }
+        };
+    }
+
+    if (setupTeamsButton) {
+        setupTeamsButton.onclick = () => {
+            if (currentSession.isHost) {
+                showPage(PAGE_IDS.TEAM_SETUP);
+                renderTeamSetup();
+            } else {
+                showMessage('Only the host can set up teams.', 'error');
+            }
+        };
+    }
+
+    showPage(PAGE_IDS.SESSION_SUCCESS);
+}
+
+function updateScorekeeperInterface() {
+    if (!currentSession || !currentSession.isHost) return;
+
+    const scorekeeperPlayersContainer = document.getElementById('scorekeeperPlayers');
+    if (!scorekeeperPlayersContainer) return;
+
+    scorekeeperPlayersContainer.innerHTML = '';
+
+    currentSession.players.forEach(player => {
+        const playerTile = document.createElement('div');
+        playerTile.className = 'player-tile';
+        playerTile.style.backgroundColor = player.color;
+
+        // Player Header with color picker
+        const playerHeader = document.createElement('div');
+        playerHeader.className = 'player-header';
+        
+        const playerNameElement = document.createElement('h3');
+        playerNameElement.className = 'player-name';
+        playerNameElement.textContent = player.name;
+        playerNameElement.onclick = () => editPlayerName(player.id, player.name);
+        
+        const colorPicker = document.createElement('input');
+        colorPicker.type = 'color';
+        colorPicker.value = player.color;
+        colorPicker.className = 'color-picker';
+        colorPicker.onchange = (e) => updatePlayerColor(player.id, e.target.value);
+        
+        playerHeader.appendChild(playerNameElement);
+        playerHeader.appendChild(colorPicker);
+        playerTile.appendChild(playerHeader);
+
+        // Player Score
+        const playerScoreElement = document.createElement('div');
+        playerScoreElement.className = 'player-score';
+        playerScoreElement.textContent = player.score.toFixed(currentSession.allowDecimals ? 1 : 0);
+        playerTile.appendChild(playerScoreElement);
+
+        // Score Controls
+        const scoreControls = document.createElement('div');
+        scoreControls.className = 'score-controls';
+
+        const createButton = (text, amount) => {
+            const button = document.createElement('button');
+            button.textContent = text;
+            button.onclick = () => updateScore(player.id, amount);
+            return button;
+        };
+
+        scoreControls.appendChild(createButton('-10', -10));
+        scoreControls.appendChild(createButton('-5', -5));
+        scoreControls.appendChild(createButton('-1', -1));
+
+        const customAmountInput = document.createElement('input');
+        customAmountInput.type = 'number';
+        customAmountInput.placeholder = 'Custom';
+        customAmountInput.className = 'custom-amount-input';
+        customAmountInput.step = currentSession.allowDecimals ? '0.1' : '1';
+        scoreControls.appendChild(customAmountInput);
+
+        const customAddButton = document.createElement('button');
+        customAddButton.textContent = '+';
+        customAddButton.onclick = () => {
+            const amount = parseFloat(customAmountInput.value);
+            if (!isNaN(amount)) updateScore(player.id, amount);
+            customAmountInput.value = '';
+        };
+        scoreControls.appendChild(customAddButton);
+
+        const customSubtractButton = document.createElement('button');
+        customSubtractButton.textContent = '-';
+        customSubtractButton.onclick = () => {
+            const amount = parseFloat(customAmountInput.value);
+            if (!isNaN(amount)) updateScore(player.id, -amount);
+            customAmountInput.value = '';
+        };
+        scoreControls.appendChild(customSubtractButton);
+
+        scoreControls.appendChild(createButton('+1', 1));
+        scoreControls.appendChild(createButton('+5', 5));
+        scoreControls.appendChild(createButton('+10', 10));
+
+        playerTile.appendChild(scoreControls);
+
+        // Reset Score Button
+        const resetScoreButton = document.createElement('button');
+        resetScoreButton.textContent = 'Reset Score';
+        resetScoreButton.className = 'reset-score-button';
+        resetScoreButton.onclick = () => resetPlayerScore(player.id);
+        playerTile.appendChild(resetScoreButton);
+
+        scorekeeperPlayersContainer.appendChild(playerTile);
+    });
+
+    // Display Team Scores
+    displayTeamScores('scorekeeperTeamScores');
+    
+    // Display Spectator Count
+    displaySpectatorInfo('scorekeeperSpectatorInfo');
+}
+
+function updatePlayerView() {
+    if (!currentSession || isSpectator) return;
+
+    const playerViewPlayersContainer = document.getElementById('playerViewPlayers');
+    if (!playerViewPlayersContainer) return;
+
+    playerViewPlayersContainer.innerHTML = '';
+
+    const sortedPlayers = [...currentSession.players].sort((a, b) => {
+        if (a.id === currentPlayerId) return -1;
+        if (b.id === currentPlayerId) return 1;
+        return 0;
+    });
+
+    // Update session info
+    const playerViewSessionCode = document.getElementById('playerViewSessionCode');
+    const playerViewSessionName = document.getElementById('playerViewSessionName');
+    if (playerViewSessionCode) playerViewSessionCode.textContent = currentSession.code;
+    if (playerViewSessionName) playerViewSessionName.textContent = currentSession.name;
+
+    sortedPlayers.forEach(player => {
+        const playerTile = document.createElement('div');
+        playerTile.className = 'player-tile compact';
+        playerTile.style.backgroundColor = player.color;
+
+        let playerNameText = player.name;
+        if (player.id === currentPlayerId) {
+            playerNameText += ' (You)';
+            playerTile.classList.add('current-player');
+            
+            // Add color picker for current player
+            const colorPicker = document.createElement('input');
+            colorPicker.type = 'color';
+            colorPicker.value = player.color;
+            colorPicker.className = 'color-picker-small';
+            colorPicker.onchange = (e) => updatePlayerColor(player.id, e.target.value);
+            playerTile.appendChild(colorPicker);
+        } else if (player.status !== 'joined') {
+            playerNameText += ' (Waiting)';
+            playerTile.classList.add('waiting-player');
+        }
+
+        const playerNameElement = document.createElement('h4');
+        playerNameElement.className = 'player-name';
+        playerNameElement.textContent = playerNameText;
+        if (player.id === currentPlayerId) {
+            playerNameElement.onclick = () => editPlayerName(player.id, player.name);
+        }
+        playerTile.appendChild(playerNameElement);
+
+        const playerScoreElement = document.createElement('div');
+        playerScoreElement.className = 'player-score';
+        playerScoreElement.textContent = player.score.toFixed(currentSession.allowDecimals ? 1 : 0);
+        playerTile.appendChild(playerScoreElement);
+
+        // Team Badge
+        const teamId = Object.keys(currentSession.teams || {}).find(tId =>
+            currentSession.teams[tId].players.includes(player.id)
+        );
+        if (teamId) {
+            const team = currentSession.teams[teamId];
+            const teamBadge = document.createElement('span');
+            teamBadge.className = 'team-badge';
+            teamBadge.style.backgroundColor = team.color || '#ccc';
+            teamBadge.textContent = team.name;
+            playerTile.appendChild(teamBadge);
+        }
+
+        playerViewPlayersContainer.appendChild(playerTile);
+    });
+
+    displayTeamScores('playerViewTeamScores');
+    displaySpectatorInfo('playerViewSpectatorInfo');
+}
+
+function updateSpectatorView() {
+    if (!currentSession || !isSpectator) return;
+
+    const spectatorViewPlayersContainer = document.getElementById('spectatorViewPlayers');
+    if (!spectatorViewPlayersContainer) return;
+
+    spectatorViewPlayersContainer.innerHTML = '';
+
+    // Update session info
+    const spectatorViewSessionCode = document.getElementById('spectatorViewSessionCode');
+    const spectatorViewSessionName = document.getElementById('spectatorViewSessionName');
+    if (spectatorViewSessionCode) spectatorViewSessionCode.textContent = currentSession.code;
+    if (spectatorViewSessionName) spectatorViewSessionName.textContent = currentSession.name;
+
+    // Sort players by score (highest first)
+    const sortedPlayers = [...currentSession.players].sort((a, b) => b.score - a.score);
+
+    sortedPlayers.forEach((player, index) => {
+        const playerTile = document.createElement('div');
+        playerTile.className = 'player-tile compact spectator';
+        playerTile.style.backgroundColor = player.color;
+
+        // Ranking badge
+        const rankBadge = document.createElement('span');
+        rankBadge.className = 'rank-badge';
+        rankBadge.textContent = `#${index + 1}`;
+        playerTile.appendChild(rankBadge);
+
+        let playerNameText = player.name;
+        if (player.status !== 'joined') {
+            playerNameText += ' (Waiting)';
+            playerTile.classList.add('waiting-player');
+        }
+
+        const playerNameElement = document.createElement('h4');
+        playerNameElement.className = 'player-name';
+        playerNameElement.textContent = playerNameText;
+        playerTile.appendChild(playerNameElement);
+
+        const playerScoreElement = document.createElement('div');
+        playerScoreElement.className = 'player-score';
+        playerScoreElement.textContent = player.score.toFixed(currentSession.allowDecimals ? 1 : 0);
+        playerTile.appendChild(playerScoreElement);
+
+        // Team Badge
+        const teamId = Object.keys(currentSession.teams || {}).find(tId =>
+            currentSession.teams[tId].players.includes(player.id)
+        );
+        if (teamId) {
+            const team = currentSession.teams[teamId];
+            const teamBadge = document.createElement('span');
+            teamBadge.className = 'team-badge';
+            teamBadge.style.backgroundColor = team.color || '#ccc';
+            teamBadge.textContent = team.name;
+            playerTile.appendChild(teamBadge);
+        }
+
+        spectatorViewPlayersContainer.appendChild(playerTile);
+    });
+
+    displayTeamScores('spectatorViewTeamScores');
+    displaySpectatorInfo('spectatorViewSpectatorInfo');
+}
+
+function displayTeamScores(containerId) {
+    const teamScoresContainer = document.getElementById(containerId);
+    if (!teamScoresContainer) return;
+
+    teamScoresContainer.innerHTML = '';
+    const teams = currentSession.teams || {};
+    const teamNames = Object.keys(teams);
+
+    if (teamNames.length > 0) {
+        const teamHeader = document.createElement('h3');
+        teamHeader.textContent = 'Team Scores';
+        teamScoresContainer.appendChild(teamHeader);
+
+        teamNames.forEach(teamId => {
+            const team = teams[teamId];
+            const teamScore = calculateTeamScore(team.players);
+            const teamDiv = document.createElement('div');
+            teamDiv.className = 'team-score-display';
+            teamDiv.style.backgroundColor = team.color || '#ccc';
+            teamDiv.innerHTML = `
+                <h4>${team.name}</h4>
+                <p>${teamScore.toFixed(currentSession.allowDecimals ? 1 : 0)}</p>
+            `;
+            teamScoresContainer.appendChild(teamDiv);
         });
     }
 }
 
-function generateReport() {
-    // Create a comprehensive report with charts
-    const reportWindow = window.open('', '_blank');
-    reportWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>GameScore Pro Report - ${currentSession.name}</title>
-            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-            <style>
-                body { font-family: Arial, sans-serif; margin: 20px; }
-                .header { text-align: center; margin-bottom: 30px; }
-                .section { margin-bottom: 30px; }
-                .chart-container { width: 100%; height: 400px; margin: 20px 0; }
-                .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
-                .stat-card { background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; }
-                .player-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; }
-                .player-card { background: white; border: 2px solid #ddd; border-radius: 8px; padding: 15px; }
-                .team-section { background: #e8f4fd; padding: 20px; border-radius: 10px; margin: 20px 0; }
-                @media print { .no-print { display: none; } }
-            </style>
-        </head>
-        <body>
-            <div class="header">
-                <h1>🎮 GameScore Pro Report</h1>
-                <h2>${currentSession.name}</h2>
-                <p>Session: ${currentSession.code} | Generated: ${new Date().toLocaleString()}</p>
-            </div>
-            
-            <div class="section">
-                <h3>📊 Game Statistics</h3>
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <h4>Players</h4>
-                        <div style="font-size: 2em; color: #667eea;">${players.length}</div>
-                    </div>
-                    <div class="stat-card">
-                        <h4>Target Score</h4>
-                        <div style="font-size: 2em; color: #667eea;">${currentSession.targetScore}</div>
-                    </div>
-                    <div class="stat-card">
-                        <h4>Score Changes</h4>
-                        <div style="font-size: 2em; color: #667eea;">${scoreHistory.filter(h => h.change).length}</div>
-                    </div>
-                    <div class="stat-card">
-                        <h4>Game Status</h4>
-                        <div style="font-size: 1.5em; color: ${currentSession.gameEnded ? '#4CAF50' : '#FF9800'};">
-                            ${currentSession.gameEnded ? '🏆 Completed' : '🎮 In Progress'}
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            ${currentSession.hasTeams ? `
-            <div class="team-section">
-                <h3>👥 Team Results</h3>
-                <div class="stats-grid">
-                    ${teams.map(team => `
-                        <div class="stat-card" style="border-left: 4px solid ${team.color.value}">
-                            <h4>${team.name}</h4>
-                            <div style="font-size: 2em; color: ${team.color.value};">${calculateTeamScore(team.id)}</div>
-                            <div style="font-size: 0.9em; color: #666;">${team.members.length} members</div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-            ` : ''}
-            
-            <div class="section">
-                <h3>📈 Score Progression Chart</h3>
-                <div class="chart-container">
-                    <canvas id="scoreChart"></canvas>
-                </div>
-            </div>
-            
-            <div class="section">
-                <h3>🏆 Final Rankings</h3>
-                <div class="player-list">
-                    ${players.sort((a, b) => b.score - a.score).map((player, index) => {
-                        const team = teams.find(t => t.members.includes(player.id));
-                        return `
-                            <div class="player-card" style="border-left: 4px solid ${player.color.value}">
-                                <h4>#${index + 1} ${player.name} ${currentSession.winner === player.name ? '🏆' : ''}</h4>
-                                <div style="font-size: 2em; color: ${player.color.value};">${player.score}</div>
-                                ${team ? `<div style="color: #666;">Team: ${team.name}</div>` : ''}
-                                <div style="color: #666;">
-                                    Changes: ${scoreHistory.filter(h => h.playerId === player.id).length}
-                                </div>
-                            </div>
-                        `;
-                    }).join('')}
-                </div>
-            </div>
-            
-            <div class="section">
-                <h3>📝 Recent Activity</h3>
-                <div style="max-height: 300px; overflow-y: auto; background: #f8f9fa; padding: 15px; border-radius: 8px;">
-                    ${scoreHistory.slice(-20).reverse().map(entry => {
-                        if (entry.action === 'reset_all') {
-                            return `<div style="padding: 5px 0; border-bottom: 1px solid #ddd;">
-                                🔄 All scores reset - ${new Date(entry.timestamp).toLocaleTimeString()}
-                            </div>`;
-                        } else if (entry.change) {
-                            return `<div style="padding: 5px 0; border-bottom: 1px solid #ddd;">
-                                ${entry.playerName}: ${entry.oldScore} → ${entry.newScore} (${entry.change > 0 ? '+' : ''}${entry.change}) - 
-                                ${new Date(entry.timestamp).toLocaleTimeString()}
-                            </div>`;
-                        }
-                        return '';
-                    }).join('')}
-                </div>
-            </div>
-            
-            <div class="no-print" style="text-align: center; margin-top: 30px;">
-                <button onclick="window.print()" style="background: #667eea; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 16px; margin: 0 10px;">
-                    🖨️ Print Report
-                </button>
-                <button onclick="window.close()" style="background: #6c757d; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 16px; margin: 0 10px;">
-                    ✖️ Close
-                </button>
-            </div>
-            
-            <script>
-                // Generate score progression chart
-                const ctx = document.getElementById('scoreChart').getContext('2d');
-                
-                // Prepare data for chart
-                const players = ${JSON.stringify(players)};
-                const scoreHistory = ${JSON.stringify(scoreHistory)};
-                const playerColors = ${JSON.stringify(playerColors)};
-                
-                // Create timeline data
-                const timelineData = {};
-                players.forEach(player => {
-                    timelineData[player.id] = [{
-                        x: 0,
-                        y: ${currentSession.startingScore}
-                    }];
-                });
-                
-                // Process score history
-                let timeIndex = 1;
-                scoreHistory.forEach(entry => {
-                    if (entry.change && timelineData[entry.playerId]) {
-                        timelineData[entry.playerId].push({
-                            x: timeIndex,
-                            y: entry.newScore
-                        });
-                        timeIndex++;
-                    }
-                });
-                
-                // Create datasets for chart
-                const datasets = players.map(player => ({
-                    label: player.name,
-                    data: timelineData[player.id] || [],
-                    borderColor: player.color.value,
-                    backgroundColor: player.color.light,
-                    borderWidth: 3,
-                    fill: false,
-                    tension: 0.1
-                }));
-                
-                new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        datasets: datasets
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            x: {
-                                type: 'linear',
-                                title: {
-                                    display: true,
-                                    text: 'Game Progress'
-                                }
-                            },
-                            y: {
-                                title: {
-                                    display: true,
-                                    text: 'Score'
-                                }
-                            }
-                        },
-                        plugins: {
-                            title: {
-                                display: true,
-                                text: 'Score Progression Over Time'
-                            },
-                            legend: {
-                                display: true,
-                                position: 'top'
-                            }
-                        },
-                        interaction: {
-                            intersect: false,
-                            mode: 'index'
-                        }
-                    }
-                });
-            </script>
-        </body>
-        </html>
-    `);
-    reportWindow.document.close();
-}
+function displaySpectatorInfo(containerId) {
+    const spectatorInfoContainer = document.getElementById(containerId);
+    if (!spectatorInfoContainer) return;
 
-function goHome() {
-    if (confirm('Are you sure you want to leave this session?')) {
-        location.reload();
+    spectatorInfoContainer.innerHTML = '';
+    const spectators = currentSession.spectators || [];
+
+    if (spectators.length > 0) {
+        const spectatorHeader = document.createElement('h4');
+        spectatorHeader.textContent = `Spectators (${spectators.length})`;
+        spectatorInfoContainer.appendChild(spectatorHeader);
+
+        const spectatorList = document.createElement('div');
+        spectatorList.className = 'spectator-list';
+        spectators.forEach(spectator => {
+            const spectatorItem = document.createElement('span');
+            spectatorItem.className = 'spectator-item';
+            spectatorItem.textContent = spectator.name;
+            spectatorList.appendChild(spectatorItem);
+        });
+        spectatorInfoContainer.appendChild(spectatorList);
     }
 }
 
-console.log('GameScore Pro loaded - Enhanced with Teams & Colors');
+// Score Logic
+async function updateScore(playerId, amount) {
+    if (!currentSession || !currentSession.isHost) return;
+
+    const playerIndex = currentSession.players.findIndex(p => p.id === playerId);
+    if (playerIndex === -1) return;
+
+    let newScore = currentSession.players[playerIndex].score + amount;
+    if (!currentSession.allowDecimals) {
+        newScore = Math.round(newScore);
+    }
+
+    currentSession.players[playerIndex].score = newScore;
+    currentSession.players[playerIndex].history.push({
+        score: newScore,
+        change: amount,
+        timestamp: Date.now()
+    });
+    currentSession.lastUpdated = Date.now();
+
+    console.log(`Player ${playerId} score changed by ${amount} to ${newScore}`);
+
+    if (firebaseInitialized && firebaseConnectionStatus) {
+        try {
+            await db.ref(`sessions/${currentSession.code}`).update({
+                players: currentSession.players,
+                lastUpdated: currentSession.lastUpdated
+            });
+        } catch (error) {
+            console.error('Error updating score in Firebase:', error);
+            showMessage('Error updating score. Check connection.', 'error');
+        }
+    } else {
+        updateScorekeeperInterface();
+    }
+}
+
+async function updatePlayerColor(playerId, newColor) {
+    if (!currentSession) return;
+
+    const playerIndex = currentSession.players.findIndex(p => p.id === playerId);
+    if (playerIndex === -1) return;
+
+    // Only allow host or the player themselves to change color
+    if (!currentSession.isHost && playerId !== currentPlayerId) {
+        showMessage('You can only change your own tile color.', 'error');
+        return;
+    }
+
+    currentSession.players[playerIndex].color = newColor;
+    currentSession.lastUpdated = Date.now();
+
+    if (playerId === currentPlayerId) {
+        currentPlayerTileColor = newColor;
+    }
+
+    if (firebaseInitialized && firebaseConnectionStatus) {
+        try {
+            await db.ref(`sessions/${currentSession.code}`).update({
+                players: currentSession.players,
+                lastUpdated: currentSession.lastUpdated
+            });
+        } catch (error) {
+            console.error('Error updating color in Firebase:', error);
+            showMessage('Error updating color. Check connection.', 'error');
+        }
+    } else {
+        if (currentSession.isHost) {
+            updateScorekeeperInterface();
+        } else {
+            updatePlayerView();
+        }
+    }
+}
+
+async function resetPlayerScore(playerId) {
+    if (!currentSession || !currentSession.isHost) return;
+
+    const playerIndex = currentSession.players.findIndex(p => p.id === playerId);
+    if (playerIndex === -1) return;
+
+    const confirmReset = confirm(`Are you sure you want to reset ${currentSession.players[playerIndex].name}'s score to ${currentSession.startingScore}?`);
+    if (!confirmReset) return;
+
+    currentSession.players[playerIndex].score = currentSession.startingScore;
+    currentSession.players[playerIndex].history.push({
+        score: currentSession.startingScore,
+        change: 'reset',
+        timestamp: Date.now()
+    });
+    currentSession.lastUpdated = Date.now();
+
+    if (firebaseInitialized && firebaseConnectionStatus) {
+        try {
+            await db.ref(`sessions/${currentSession.code}`).update({
+                players: currentSession.players,
+                lastUpdated: currentSession.lastUpdated
+            });
+            showMessage(`${currentSession.players[playerIndex].name}'s score reset!`, 'success');
+        } catch (error) {
+            console.error('Error resetting score in Firebase:', error);
+            showMessage('Error resetting score. Check connection.', 'error');
+        }
+    } else {
+        updateScorekeeperInterface();
+    }
+}
+
+async function editPlayerName(playerId, currentName) {
+    if (!currentSession) return;
+
+    let newName = prompt(`Enter new name for ${currentName}:`, currentName);
+    if (newName === null || newName.trim() === '') return;
+    newName = newName.trim();
+
+    const playerIndex = currentSession.players.findIndex(p => p.id === playerId);
+    if (playerIndex === -1) return;
+
+    if (currentSession.isHost || playerId === currentPlayerId) {
+        currentSession.players[playerIndex].name = newName;
+        currentSession.lastUpdated = Date.now();
+
+        if (playerId === currentPlayerId) {
+            currentPlayerName = newName;
+        }
+
+        if (firebaseInitialized && firebaseConnectionStatus) {
+            try {
+                await db.ref(`sessions/${currentSession.code}`).update({
+                    players: currentSession.players,
+                    lastUpdated: currentSession.lastUpdated
+                });
+                showMessage(`Name updated to ${newName}!`, 'success');
+            } catch (error) {
+                console.error('Error updating name in Firebase:', error);
+                showMessage('Error updating name. Check connection.', 'error');
+            }
+        } else {
+            if (currentSession.isHost) {
+                updateScorekeeperInterface();
+            } else {
+                updatePlayerView();
+            }
+        }
+    } else {
+        showMessage('Only the host can edit other players\' names.', 'error');
+    }
+}
+
+// Team Management
+function calculateTeamScore(playerIds) {
+    if (!currentSession || !playerIds) return 0;
+    return playerIds.reduce((total, playerId) => {
+        const player = currentSession.players.find(p => p.id === playerId);
+        return total + (player ? player.score : 0);
+    }, 0);
+}
+
+function renderTeamSetup() {
+    const teamSetupContainer = document.getElementById('teamSetupContainer');
+    if (!teamSetupContainer) return;
+
+    teamSetupContainer.innerHTML = `
+        <h2>Team Setup</h2>
+        <div id="availablePlayers" class="player-pool">
+            <h3>Available Players</h3>
+            <div id="playerPool"></div>
+        </div>
+        <div id="teamsContainer">
+            <h3>Teams</h3>
+            <button id="createTeamButton" class="create-team-btn">Create New Team</button>
+            <div id="teamsList"></div>
+        </div>
+        <div class="team-actions">
+            <button onclick="saveTeamConfiguration()" class="save-teams-btn">Save Team Configuration</button>
+            <button onclick="clearAllTeams()" class="clear-teams-btn">Clear All Teams</button>
+        </div>
+    `;
+
+    renderPlayerPool();
+    renderTeamsList();
+    
+    document.getElementById('createTeamButton').onclick = createNewTeam;
+}
+
+function renderPlayerPool() {
+    const playerPool = document.getElementById('playerPool');
+    if (!playerPool) return;
+
+    playerPool.innerHTML = '';
+    
+    currentSession.players.forEach(player => {
+        const isInTeam = Object.values(currentSession.teams || {}).some(team => 
+            team.players.includes(player.id)
+        );
+        
+        if (!isInTeam) {
+            const playerElement = document.createElement('div');
+            playerElement.className = 'draggable-player';
+            playerElement.draggable = true;
+            playerElement.dataset.playerId = player.id;
+            playerElement.style.backgroundColor = player.color;
+            playerElement.textContent = player.name;
+            
+            playerElement.ondragstart = (e) => {
+                e.dataTransfer.setData('text/plain', player.id);
+            };
+            
+            playerPool.appendChild(playerElement);
+        }
+    });
+}
+
+function renderTeamsList() {
+    const teamsList = document.getElementById('teamsList');
+    if (!teamsList) return;
+
+    teamsList.innerHTML = '';
+    
+    Object.entries(currentSession.teams || {}).forEach(([teamId, team]) => {
+        const teamElement = document.createElement('div');
+        teamElement.className = 'team-container';
+        teamElement.style.borderColor = team.color;
+        
+        teamElement.innerHTML = `
+            <div class="team-header">
+                <input type="text" value="${team.name}" onchange="updateTeamName('${teamId}', this.value)" class="team-name-input">
+                <input type="color" value="${team.color}" onchange="updateTeamColor('${teamId}', this.value)" class="team-color-picker">
+                <button onclick="deleteTeam('${teamId}')" class="delete-team-btn">×</button>
+            </div>
+            <div class="team-players" ondrop="dropPlayer(event, '${teamId}')" ondragover="allowDrop(event)">
+                ${team.players.map(playerId => {
+                    const player = currentSession.players.find(p => p.id === playerId);
+                    return player ? `
+                        <div class="team-player" draggable="true" ondragstart="dragTeamPlayer(event, '${playerId}')" style="background-color: ${player.color}">
+                            ${player.name}
+                        </div>
+                    ` : '';
+                }).join('')}
+            </div>
+            <div class="team-score">Team Score: ${calculateTeamScore(team.players).toFixed(currentSession.allowDecimals ? 1 : 0)}</div>
+        `;
+        
+        teamsList.appendChild(teamElement);
+    });
+}
+
+function createNewTeam() {
+    const teamName = prompt('Enter team name:');
+    if (!teamName || teamName.trim() === '') return;
+
+    const teamId = 'team-' + Date.now();
+    const teamColor = getRandomColor();
+    
+    if (!currentSession.teams) currentSession.teams = {};
+    currentSession.teams[teamId] = {
+        name: teamName.trim(),
+        color: teamColor,
+        players: []
+    };
+    
+    renderTeamsList();
+}
+
+function allowDrop(event) {
+    event.preventDefault();
+}
+
+function dropPlayer(event, teamId) {
+    event.preventDefault();
+    const playerId = event.dataTransfer.getData('text/plain');
+    
+    if (!currentSession.teams[teamId].players.includes(playerId)) {
+        currentSession.teams[teamId].players.push(playerId);
+        renderPlayerPool();
+        renderTeamsList();
+    }
+}
+
+function dragTeamPlayer(event, playerId) {
+    event.dataTransfer.setData('text/plain', playerId);
+}
+
+function updateTeamName(teamId, newName) {
+    if (currentSession.teams[teamId]) {
+        currentSession.teams[teamId].name = newName;
+    }
+}
+
+function updateTeamColor(teamId, newColor) {
+    if (currentSession.teams[teamId]) {
+        currentSession.teams[teamId].color = newColor;
+        renderTeamsList();
+    }
+}
+
+function deleteTeam(teamId) {
+    if (confirm('Are you sure you want to delete this team?')) {
+        delete currentSession.teams[teamId];
+        renderPlayerPool();
+        renderTeamsList();
+    }
+}
+
+function clearAllTeams() {
+    if (confirm('Are you sure you want to clear all teams?')) {
+        currentSession.teams = {};
+        renderPlayerPool();
+        renderTeamsList();
+    }
+}
+
+async function saveTeamConfiguration() {
+    if (!currentSession || !currentSession.isHost) return;
+
+    currentSession.lastUpdated = Date.now();
+
+    if (firebaseInitialized && firebaseConnectionStatus) {
+        try {
+            await db.ref(`sessions/${currentSession.code}`).update({
+                teams: currentSession.teams,
+                lastUpdated: currentSession.lastUpdated
+            });
+            showMessage('Team configuration saved!', 'success');
+        } catch (error) {
+            console.error('Error saving teams to Firebase:', error);
+            showMessage('Error saving teams. Check connection.', 'error');
+        }
+    } else {
+        showMessage('Teams saved locally (offline mode)', 'warning');
+    }
+}
+
+// Game Win Condition
+function checkWinCondition() {
+    if (!currentSession || !currentSession.targetScore) return;
+
+    const winners = currentSession.players.filter(player => player.score >= currentSession.targetScore);
+
+    if (winners.length > 0) {
+        winners.sort((a, b) => b.score - a.score);
+        const winnerNames = winners.map(w => w.name).join(', ');
+        const winnerScores = winners.map(w => w.score).join(', ');
+
+        if (!currentSession.playAfterTarget && currentSession.gameEnded) {
+            return;
+        }
+
+        if (!currentSession.playAfterTarget) {
+            currentSession.gameEnded = true;
+            if (currentSession.isHost && firebaseInitialized && firebaseConnectionStatus) {
+                db.ref(`sessions/${currentSession.code}/gameEnded`).set(true);
+            }
+            showMessage(`Game Over! Winner(s): ${winnerNames} with scores: ${winnerScores}!`, 'success');
+            alert(`Game Over! Winner(s): ${winnerNames} with scores: ${winnerScores}!`);
+        } else {
+            showMessage(`Target score reached by: ${winnerNames}! Current scores: ${winnerScores}. Game continues!`, 'info');
+        }
+    } else {
+        if (currentSession.gameEnded && currentSession.isHost && firebaseInitialized && firebaseConnectionStatus) {
+            db.ref(`sessions/${currentSession.code}/gameEnded`).set(false);
+        }
+        currentSession.gameEnded = false;
+    }
+}
+
+// Event Listeners
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('Page loaded, initializing...');
+    
+    await initializeFirebaseWithRetry();
+    
+    // Bind event listeners
+    const createButton = document.getElementById('createSessionBtn');
+    if (createButton) {
+        createButton.onclick = () => showPage(PAGE_IDS.CREATE_SESSION);
+    }
+
+    const joinButton = document.getElementById('joinSessionBtn');
+    if (joinButton) {
+        joinButton.onclick = () => showPage(PAGE_IDS.JOIN_SESSION);
+    }
+
+    const createForm = document.getElementById('createSessionForm');
+    if (createForm) {
+        createForm.onsubmit = handleCreateSession;
+    }
+
+    const joinForm = document.getElementById('joinSessionForm');
+    if (joinForm) {
+        joinForm.onsubmit = (event) => {
+            event.preventDefault();
+            
+            const joinCodeInput = document.getElementById('joinCode');
+            const playerNameInput = document.getElementById('joinPlayerName');
+            
+            const joinCode = joinCodeInput ? joinCodeInput.value.trim() : '';
+            const playerName = playerNameInput ? playerNameInput.value.trim() : '';
+
+            if (joinCode && playerName) {
+                joinSession(joinCode.toUpperCase(), playerName, getRandomColor(), false);
+            } else {
+                showMessage('Please enter both session code and your name.', 'error');
+            }
+        };
+    }
+
+    // Spectator join button
+    const spectatorJoinButton = document.getElementById('spectatorJoinBtn');
+    if (spectatorJoinButton) {
+        spectatorJoinButton.onclick = () => {
+            const joinCodeInput = document.getElementById('joinCode');
+            const spectatorNameInput = document.getElementById('joinPlayerName');
+            
+            const joinCode = joinCodeInput ? joinCodeInput.value.trim() : '';
+            const spectatorName = spectatorNameInput ? spectatorNameInput.value.trim() : 'Spectator';
+            
+            if (joinCode) {
+                joinSession(joinCode.toUpperCase(), spectatorName, '#000000', true);
+            } else {
+                showMessage('Please enter session code to join as spectator.', 'error');
+            }
+        };
+    }
+
+    // Player count controls
+    const increasePlayerButton = document.getElementById('increasePlayerCount');
+    if (increasePlayerButton) {
+        increasePlayerButton.onclick = () => {
+            const playerCountInput = document.getElementById('playerCount');
+            if (playerCountInput) {
+                let count = parseInt(playerCountInput.value) || 2;
+                if (count < 12) {
+                    count++;
+                    playerCountInput.value = count;
+                }
+            }
+        };
+    }
+
+    const decreasePlayerButton = document.getElementById('decreasePlayerCount');
+    if (decreasePlayerButton) {
+        decreasePlayerButton.onclick = () => {
+            const playerCountInput = document.getElementById('playerCount');
+            if (playerCountInput) {
+                let count = parseInt(playerCountInput.value) || 2;
+                if (count > 1) {
+                    count--;
+                    playerCountInput.value = count;
+                }
+            }
+        };
+    }
+
+    console.log('App initialized successfully!');
+    showPage(PAGE_IDS.LANDING);
+});
+
+console.log('GameScore Pro script loaded - Enhanced with Teams, Colors, and Spectator Mode');
 

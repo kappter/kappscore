@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GameScore Pro</title>
-    <link rel="stylesheet" href="style.css">
     
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
@@ -12,145 +11,222 @@
     
     <!-- Chart.js for game summary charts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Landing Page -->
-    <div id="landingPage" class="page active">
-        <div class="container">
-            <header>
-                <div class="header-content">
-                    <div class="header-left">
-                        <h1>GameScore Pro</h1>
-                        <p>Universal score tracking for any game</p>
-                    </div>
-                    <div class="header-right">
-                        <div class="connection-status">
-                            <span class="status-dot" id="connectionDot"></span>
-                            <span class="status-text" id="connectionText">Connecting...</span>
-                        </div>
-                        <button id="exportBtn" class="export-btn">📊 Export</button>
-                        <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
-                            <span class="theme-icon">🌙</span>
-                        </button>
-                    </div>
-                </div>
-            </header>
-            
-            <div class="options-grid">
-                <button id="createSessionBtn" class="option-tile">
-                    <div class="tile-icon">🎮</div>
-                    <h2>Create New Session</h2>
-                    <p>Start a new game and be the scorekeeper</p>
-                </button>
-                <button id="joinSessionBtn" class="option-tile">
-                    <div class="tile-icon">👥</div>
-                    <h2>Join Session</h2>
-                    <p>Enter a code to join an existing game</p>
-                </button>
+    <div class="container">
+        <!-- Connection Status -->
+        <div id="connectionStatus" class="connection-status">Connecting...</div>
+        
+        <!-- Message Container -->
+        <div id="messageContainer" class="message" style="display: none;"></div>
+
+        <!-- Landing Page -->
+        <div id="landing" class="page">
+            <div class="header">
+                <h1>🎮 GameScore Pro</h1>
+                <p>Universal score tracking for any game</p>
+            </div>
+
+            <div class="landing-buttons">
+                <button id="createSessionBtn" class="btn">🎯 Create New Session</button>
+                <button id="joinSessionBtn" class="btn">👥 Join Session</button>
             </div>
         </div>
-    </div>
 
-    <!-- Create Session Page -->
-    <div id="createSessionPage" class="page">
-        <div class="container">
-            <header>
-                <div class="header-content">
-                    <div class="header-left">
-                        <button id="backToLanding" class="back-btn">← Back</button>
-                        <h1>Create New Session</h1>
-                    </div>
-                    <div class="header-right">
-                        <div class="connection-status">
-                            <span class="status-dot" id="connectionDot2"></span>
-                            <span class="status-text" id="connectionText2">Connecting...</span>
-                        </div>
-                        <button class="theme-toggle" onclick="app.toggleTheme()" aria-label="Toggle dark mode">
-                            <span class="theme-icon">🌙</span>
-                        </button>
-                    </div>
-                </div>
-            </header>
-            
-            <form id="createSessionForm" class="session-form">
+        <!-- Create Session Page -->
+        <div id="createSession" class="page">
+            <div class="header">
+                <h1>Create New Session</h1>
+                <p>Set up your game parameters</p>
+            </div>
+
+            <form id="createSessionForm">
                 <div class="form-group">
-                    <label for="sessionName">Session Name (Optional)</label>
-                    <input type="text" id="sessionName" placeholder="e.g., Friday Night Cards">
+                    <label for="sessionName">Session Name</label>
+                    <input type="text" id="sessionName" placeholder="e.g., Friday Night Cards" required>
                 </div>
-                
+
                 <div class="form-group">
-                    <label for="numPlayers">Number of Players</label>
-                    <div class="number-input">
-                        <button type="button" id="decreasePlayer" class="number-btn">-</button>
-                        <input type="number" id="numPlayers" value="2" min="1" max="12" readonly>
-                        <button type="button" id="increasePlayer" class="number-btn">+</button>
+                    <label for="playerCount">Number of Players</label>
+                    <input type="number" id="playerCount" value="2" min="1" max="12" readonly>
+                    <div class="player-count-controls">
+                        <button type="button" id="decreasePlayerCount" class="player-count-btn">−</button>
+                        <button type="button" id="increasePlayerCount" class="player-count-btn">+</button>
                     </div>
                 </div>
-                
+
                 <div class="form-group">
                     <label for="startingScore">Starting Score</label>
                     <input type="number" id="startingScore" value="0" step="1">
                 </div>
-                
+
                 <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="allowDecimals">
-                        Allow decimal scores
-                    </label>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="allowDecimals" name="allowDecimals">
+                        <label for="allowDecimals">Allow decimal scores (e.g., 1.5)</label>
+                    </div>
                 </div>
-                
+
                 <div class="form-group">
                     <label for="targetScore">Target Score (Optional)</label>
-                    <input type="number" id="targetScore" placeholder="e.g., 100">
+                    <input type="number" id="targetScore" placeholder="e.g., 500">
                 </div>
-                
+
                 <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="playAfterTarget">
-                        Continue playing after target score is reached
-                    </label>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="playAfterTarget" name="playAfterTarget">
+                        <label for="playAfterTarget">Continue playing after target score is reached</label>
+                    </div>
                 </div>
-                
-                <button type="submit" class="primary-btn">🎮 Create Session</button>
+
+                <button type="submit" id="createSessionButton" class="btn">Create Session</button>
+                <button type="button" onclick="showPage('landing')" class="btn btn-secondary">Back</button>
             </form>
+        </div>
+
+        <!-- Join Session Page -->
+        <div id="joinSession" class="page">
+            <div class="header">
+                <h1>Join Session</h1>
+                <p>Enter session code and your name</p>
+            </div>
+
+            <form id="joinSessionForm">
+                <div class="form-group">
+                    <label for="joinCode">Session Code</label>
+                    <input type="text" id="joinCode" placeholder="Enter 6-character code" maxlength="6" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="joinPlayerName">Your Name</label>
+                    <input type="text" id="joinPlayerName" placeholder="Enter your name" required>
+                </div>
+
+                <button type="submit" class="btn">Join as Player</button>
+                <button type="button" id="spectatorJoinBtn" class="btn btn-secondary">Join as Spectator</button>
+                <button type="button" onclick="showPage('landing')" class="btn btn-secondary">Back</button>
+            </form>
+        </div>
+
+        <!-- Session Success Page -->
+        <div id="sessionSuccess" class="page">
+            <div class="header">
+                <h1>Session Created!</h1>
+            </div>
+
+            <div class="session-info">
+                <div class="session-name" id="displaySessionName">Game Session</div>
+                <div class="session-code" id="displaySessionCode">------</div>
+                <p>Share this code with other players</p>
+            </div>
+
+            <div class="session-actions">
+                <button id="copySessionCode" class="btn">📋 Copy Code</button>
+                <button id="startScoringButton" class="btn btn-success">🎯 Start Scoring</button>
+                <button id="setupTeamsButton" class="btn btn-warning">👥 Setup Teams</button>
+                <button onclick="showPage('landing')" class="btn btn-secondary">🏠 Home</button>
+            </div>
+        </div>
+
+        <!-- Scorekeeper Page -->
+        <div id="scorekeeper" class="page">
+            <div class="header">
+                <h1>Scorekeeper Mode</h1>
+                <p>Session: <span id="scorekeeperSessionCode">------</span></p>
+            </div>
+
+            <div id="scorekeeperPlayers" class="players-grid"></div>
+            <div id="scorekeeperTeamScores"></div>
+            <div id="scorekeeperSpectatorInfo"></div>
+
+            <div class="player-actions">
+                <div class="action-buttons">
+                    <button onclick="showReport()" class="btn">📊 Show Report</button>
+                    <button onclick="resetAllScores()" class="btn btn-warning">🔄 Reset All</button>
+                    <button onclick="leaveSession()" class="btn btn-danger">🚪 End Session</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Player View Page -->
+        <div id="playerView" class="page">
+            <div class="header">
+                <h1>Player View</h1>
+                <p>Session: <span id="playerViewSessionCode">------</span> - <span id="playerViewSessionName">Game</span></p>
+            </div>
+
+            <div id="playerViewPlayers" class="players-grid"></div>
+            <div id="playerViewTeamScores"></div>
+            <div id="playerViewSpectatorInfo"></div>
+
+            <div class="player-actions">
+                <div class="action-buttons">
+                    <button onclick="showReport()" class="btn">📊 View Report</button>
+                    <button onclick="leaveSession()" class="btn btn-danger">🚪 Leave Session</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Spectator View Page -->
+        <div id="spectatorView" class="page">
+            <div class="header">
+                <h1>👁️ Spectator View</h1>
+                <p>Session: <span id="spectatorViewSessionCode">------</span> - <span id="spectatorViewSessionName">Game</span></p>
+            </div>
+
+            <div id="spectatorViewPlayers" class="players-grid"></div>
+            <div id="spectatorViewTeamScores"></div>
+            <div id="spectatorViewSpectatorInfo"></div>
+
+            <div class="player-actions">
+                <div class="action-buttons">
+                    <button onclick="showReport()" class="btn">📊 View Report</button>
+                    <button onclick="leaveSession()" class="btn btn-danger">🚪 Leave Session</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Team Setup Page -->
+        <div id="teamSetup" class="page">
+            <div class="header">
+                <h1>Team Setup</h1>
+                <p>Drag players to create teams</p>
+            </div>
+
+            <div id="teamSetupContainer">
+                <!-- Team setup interface will be generated here -->
+            </div>
+
+            <div class="team-actions">
+                <button onclick="showPage('sessionSuccess')" class="btn btn-secondary">← Back to Session</button>
+            </div>
+        </div>
+
+        <!-- Report Modal -->
+        <div id="reportModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Game Report</h2>
+                    <button onclick="closeReport()" class="close-btn">×</button>
+                </div>
+                <div id="reportContent" class="modal-body">
+                    <!-- Report content will be generated here -->
+                </div>
+                <div class="modal-footer">
+                    <button onclick="exportReport()" class="btn">📄 Export JSON</button>
+                    <button onclick="exportHTMLReport()" class="btn">🌐 Export HTML</button>
+                    <button onclick="closeReport()" class="btn btn-secondary">Close</button>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Join Session Page -->
-    <div id="joinSessionPage" class="page">
-        <div class="container">
-            <header>
-                <div class="header-content">
-                    <div class="header-left">
-                        <button id="backToLandingFromJoin" class="back-btn">← Back</button>
-                        <h1>Join Session</h1>
-                    </div>
-                    <div class="header-right">
-                        <div class="connection-status">
-                            <span class="status-dot" id="connectionDot3"></span>
-                            <span class="status-text" id="connectionText3">Connecting...</span>
-                        </div>
-                        <button class="theme-toggle" onclick="app.toggleTheme()" aria-label="Toggle dark mode">
-                            <span class="theme-icon">🌙</span>
-                        </button>
-                    </div>
-                </div>
-            </header>
-            
-            <form id="joinSessionForm" class="session-form">
-                <div class="form-group">
-                    <label for="joinCode">Session Code</label>
-                    <input type="text" id="joinCode" placeholder="Enter 6-character code" maxlength="6" style="text-transform: uppercase;" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="playerName">Your Name</label>
-                    <input type="text" id="playerName" placeholder="Enter your name" required>
-                </div>
-                
-                <button type="submit" class="primary-btn">👥 Join Session</button>
-            </form>
-        </div>
+    <!-- Fixed Footer -->
+    <div class="footer">
+        © 2025 Ken Kapptie | For educational use only | All rights reserved | 
+        <a href="#" onclick="showMessage('More tools coming soon!', 'info')">More tools like this</a>
     </div>
 
     <!-- Firebase Configuration -->
@@ -158,6 +234,187 @@
     
     <!-- Main Application Script -->
     <script src="script.js"></script>
+
+    <script>
+        // Additional helper functions for modal and reports
+        function closeReport() {
+            document.getElementById('reportModal').style.display = 'none';
+        }
+
+        function exportReport() {
+            if (!currentSession) {
+                showMessage('No session data to export.', 'error');
+                return;
+            }
+            
+            const dataStr = JSON.stringify(currentSession, null, 2);
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `gamescore-${currentSession.code}-${new Date().toISOString().split('T')[0]}.json`;
+            link.click();
+            URL.revokeObjectURL(url);
+            showMessage('Report exported successfully!', 'success');
+        }
+
+        function exportHTMLReport() {
+            if (!currentSession) {
+                showMessage('No session data to export.', 'error');
+                return;
+            }
+            
+            const reportContent = document.getElementById('reportContent').innerHTML;
+            const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GameScore Pro Report - ${currentSession.name}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .player-scores { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+        .player-card { background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; }
+        .chart-container { margin: 20px 0; text-align: center; }
+        @media print { body { margin: 0; } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>GameScore Pro Report</h1>
+        <h2>${currentSession.name}</h2>
+        <p>Session Code: ${currentSession.code}</p>
+        <p>Generated: ${new Date().toLocaleString()}</p>
+    </div>
+    ${reportContent}
+</body>
+</html>`;
+            
+            const dataBlob = new Blob([htmlContent], {type: 'text/html'});
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `gamescore-report-${currentSession.code}-${new Date().toISOString().split('T')[0]}.html`;
+            link.click();
+            URL.revokeObjectURL(url);
+            showMessage('HTML report exported successfully!', 'success');
+        }
+
+        function resetAllScores() {
+            if (!currentSession || !currentSession.isHost) {
+                showMessage('Only the host can reset all scores.', 'error');
+                return;
+            }
+            
+            if (confirm('Are you sure you want to reset all player scores to the starting score?')) {
+                currentSession.players.forEach(player => {
+                    player.score = currentSession.startingScore;
+                    player.history.push({
+                        score: currentSession.startingScore,
+                        change: 'reset-all',
+                        timestamp: Date.now()
+                    });
+                });
+                
+                currentSession.lastUpdated = Date.now();
+                
+                if (firebaseInitialized && firebaseConnectionStatus) {
+                    db.ref(`sessions/${currentSession.code}`).update({
+                        players: currentSession.players,
+                        lastUpdated: currentSession.lastUpdated
+                    }).then(() => {
+                        showMessage('All scores reset successfully!', 'success');
+                    }).catch(error => {
+                        console.error('Error resetting scores:', error);
+                        showMessage('Error resetting scores. Check connection.', 'error');
+                    });
+                } else {
+                    updateScorekeeperInterface();
+                    showMessage('All scores reset locally (offline mode)', 'warning');
+                }
+            }
+        }
+
+        function showReport() {
+            if (!currentSession) {
+                showMessage('No session data to generate report.', 'error');
+                return;
+            }
+
+            const reportModal = document.getElementById('reportModal');
+            const reportContent = document.getElementById('reportContent');
+            if (!reportModal || !reportContent) return;
+
+            reportContent.innerHTML = '';
+
+            // Session Info
+            reportContent.innerHTML += `<h2>Session Report: ${currentSession.name}</h2>`;
+            reportContent.innerHTML += `<p><strong>Code:</strong> ${currentSession.code}</p>`;
+            reportContent.innerHTML += `<p><strong>Players:</strong> ${currentSession.playerCount}</p>`;
+            reportContent.innerHTML += `<p><strong>Started:</strong> ${new Date(currentSession.createdAt).toLocaleString()}</p>`;
+            reportContent.innerHTML += `<p><strong>Last Updated:</strong> ${new Date(currentSession.lastUpdated).toLocaleString()}</p>`;
+            if (currentSession.targetScore) {
+                reportContent.innerHTML += `<p><strong>Target Score:</strong> ${currentSession.targetScore}</p>`;
+            }
+
+            // Player Scores
+            reportContent.innerHTML += '<h3>Final Player Scores</h3>';
+            const finalScoresList = document.createElement('ul');
+            currentSession.players.sort((a, b) => b.score - a.score).forEach((player, index) => {
+                const listItem = document.createElement('li');
+                const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '';
+                listItem.innerHTML = `${medal} ${player.name}: ${player.score.toFixed(currentSession.allowDecimals ? 1 : 0)}`;
+                finalScoresList.appendChild(listItem);
+            });
+            reportContent.appendChild(finalScoresList);
+
+            // Team Scores (if teams exist)
+            const teams = currentSession.teams || {};
+            const teamNames = Object.keys(teams);
+            if (teamNames.length > 0) {
+                reportContent.innerHTML += '<h3>Team Scores</h3>';
+                const teamScoresList = document.createElement('ul');
+                teamNames.forEach(teamId => {
+                    const team = teams[teamId];
+                    const teamScore = calculateTeamScore(team.players);
+                    const listItem = document.createElement('li');
+                    listItem.innerHTML = `${team.name}: ${teamScore.toFixed(currentSession.allowDecimals ? 1 : 0)}`;
+                    teamScoresList.appendChild(listItem);
+                });
+                reportContent.appendChild(teamScoresList);
+            }
+
+            // Spectator Info
+            const spectators = currentSession.spectators || [];
+            if (spectators.length > 0) {
+                reportContent.innerHTML += `<h3>Spectators (${spectators.length})</h3>`;
+                const spectatorsList = document.createElement('ul');
+                spectators.forEach(spectator => {
+                    const listItem = document.createElement('li');
+                    listItem.textContent = spectator.name;
+                    spectatorsList.appendChild(listItem);
+                });
+                reportContent.appendChild(spectatorsList);
+            }
+
+            // Game Statistics
+            reportContent.innerHTML += '<h3>Game Statistics</h3>';
+            const duration = Math.round((currentSession.lastUpdated - currentSession.createdAt) / 60000);
+            const totalMoves = currentSession.players.reduce((total, player) => total + (player.history ? player.history.length - 1 : 0), 0);
+            reportContent.innerHTML += `<p><strong>Game Duration:</strong> ${duration} minutes</p>`;
+            reportContent.innerHTML += `<p><strong>Total Score Changes:</strong> ${totalMoves}</p>`;
+
+            reportModal.style.display = 'block';
+        }
+
+        // Modal click outside to close
+        window.onclick = function(event) {
+            const modal = document.getElementById('reportModal');
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        }
+    </script>
 </body>
 </html>
 

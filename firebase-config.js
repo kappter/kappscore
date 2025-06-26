@@ -1,43 +1,37 @@
 // Firebase Configuration for GameScore Pro
+// Replace these values with your actual Firebase project configuration
+
 const firebaseConfig = {
-    apiKey: "AIzaSyD6-GCVT9CfSCcZzmN1hro1d0FVGpImTkk",
-    authDomain: "kappscore.firebaseapp.com",
-    databaseURL: "https://kappscore-default-rtdb.firebaseio.com/",
-    projectId: "kappscore",
-    storageBucket: "kappscore.firebasestorage.app",
-    messagingSenderId: "673189308032",
-    appId: "1:673189308032:web:B55b94d7d75dc2f0e96865",
-    measurementId: "G-7MREYWZRCX"
+    apiKey: "your-api-key-here",
+    authDomain: "your-project-id.firebaseapp.com",
+    databaseURL: "https://your-project-id-default-rtdb.firebaseio.com/",
+    projectId: "your-project-id",
+    storageBucket: "your-project-id.appspot.com",
+    messagingSenderId: "123456789",
+    appId: "1:123456789:web:abcdef123456"
 };
 
 // Initialize Firebase
-firebase.initializeApp(firebaseConfig);
-const database = firebase.database();
-
-// Connection status monitoring
-let isConnected = false;
-
-// Monitor connection status
-const connectedRef = database.ref('.info/connected');
-connectedRef.on('value', (snapshot) => {
-    isConnected = snapshot.val() === true;
-    updateConnectionStatus(isConnected);
-    console.log('Firebase connection status:', isConnected ? 'Online' : 'Offline');
-});
-
-// Update connection status in UI
-function updateConnectionStatus(connected) {
-    const dots = document.querySelectorAll('.status-dot');
-    const texts = document.querySelectorAll('.status-text');
+try {
+    firebase.initializeApp(firebaseConfig);
+    console.log('Firebase initialized successfully');
     
-    dots.forEach(dot => {
-        dot.className = `status-dot ${connected ? 'online' : 'offline'}`;
+    // Monitor connection status
+    const connectedRef = firebase.database().ref('.info/connected');
+    connectedRef.on('value', function(snap) {
+        if (snap.val() === true) {
+            console.log('Firebase connection status: Online');
+        } else {
+            console.log('Firebase connection status: Offline');
+        }
     });
     
-    texts.forEach(text => {
-        text.textContent = connected ? 'Online' : 'Offline';
-    });
+} catch (error) {
+    console.error('Error initializing Firebase:', error);
 }
 
-console.log('Firebase initialized successfully');
+// Export for use in other scripts
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { firebaseConfig };
+}
 
