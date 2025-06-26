@@ -455,6 +455,17 @@ function showSessionSuccessScreen(sessionCode, sessionName) {
 function updateScorekeeperInterface() {
     if (!currentSession || !currentSession.isHost) return;
 
+    // Update session info
+    const sessionNameElement = document.getElementById('scorekeeperSessionName');
+    const sessionCodeElement = document.getElementById('scorekeeperSessionCode');
+    
+    if (sessionNameElement) {
+        sessionNameElement.textContent = currentSession.name || 'Game Session';
+    }
+    if (sessionCodeElement) {
+        sessionCodeElement.textContent = currentSession.code || '------';
+    }
+
     const scorekeeperPlayersContainer = document.getElementById('scorekeeperPlayers');
     if (!scorekeeperPlayersContainer) return;
 
@@ -463,26 +474,16 @@ function updateScorekeeperInterface() {
     currentSession.players.forEach(player => {
         const playerTile = document.createElement('div');
         playerTile.className = 'player-tile';
-        playerTile.style.backgroundColor = player.color;
+        playerTile.style.borderLeft = `4px solid ${player.color}`;
 
-        // Player Header with color picker
-        const playerHeader = document.createElement('div');
-        playerHeader.className = 'player-header';
-        
-        const playerNameElement = document.createElement('h3');
+        // Player Name
+        const playerNameElement = document.createElement('div');
         playerNameElement.className = 'player-name';
         playerNameElement.textContent = player.name;
-        playerNameElement.onclick = () => editPlayerName(player.id, player.name);
-        
-        const colorPicker = document.createElement('input');
-        colorPicker.type = 'color';
-        colorPicker.value = player.color;
-        colorPicker.className = 'color-picker';
-        colorPicker.onchange = (e) => updatePlayerColor(player.id, e.target.value);
-        
-        playerHeader.appendChild(playerNameElement);
-        playerHeader.appendChild(colorPicker);
-        playerTile.appendChild(playerHeader);
+        if (player.id === currentPlayerId) {
+            playerNameElement.textContent += ' (You)';
+        }
+        playerTile.appendChild(playerNameElement);
 
         // Player Score
         const playerScoreElement = document.createElement('div');
@@ -496,6 +497,7 @@ function updateScorekeeperInterface() {
 
         const createButton = (text, amount) => {
             const button = document.createElement('button');
+            button.className = 'score-btn';
             button.textContent = text;
             button.onclick = () => updateScore(player.id, amount);
             return button;
@@ -1161,7 +1163,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Theme toggle button
     const themeToggle = document.getElementById('themeToggle');
     if (themeToggle) {
-        themeToggle.onclick = toggleTheme;
+        themeToggle.onchange = toggleTheme;
         console.log('Theme toggle bound');
     }
 
@@ -1222,26 +1224,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Theme Management
 function initializeTheme() {
     const savedTheme = localStorage.getItem('gameScoreTheme') || 'light';
+    const themeToggle = document.getElementById('themeToggle');
+    
     document.documentElement.setAttribute('data-theme', savedTheme);
-    updateThemeIcon(savedTheme);
+    
+    if (themeToggle) {
+        themeToggle.checked = savedTheme === 'dark';
+    }
 }
 
 function toggleTheme() {
-    const currentTheme = document.documentElement.getAttribute('data-theme');
-    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    const themeToggle = document.getElementById('themeToggle');
+    const newTheme = themeToggle && themeToggle.checked ? 'dark' : 'light';
     
     document.documentElement.setAttribute('data-theme', newTheme);
     localStorage.setItem('gameScoreTheme', newTheme);
-    updateThemeIcon(newTheme);
-    
-    showMessage(`Switched to ${newTheme} mode`, 'info');
-}
-
-function updateThemeIcon(theme) {
-    const themeIcon = document.getElementById('themeIcon');
-    if (themeIcon) {
-        themeIcon.textContent = theme === 'dark' ? '☀️' : '🌙';
-    }
 }
 
 console.log('GameScore Pro script loaded - Enhanced with Teams, Colors, and Spectator Mode');

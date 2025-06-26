@@ -16,13 +16,20 @@
 </head>
 <body>
     <div class="container">
-        <!-- Theme Toggle Button -->
-        <button id="themeToggle" class="theme-toggle" title="Toggle Dark Mode">
-            <span id="themeIcon">🌙</span>
-        </button>
-        
-        <!-- Connection Status -->
-        <div id="connectionStatus" class="connection-status">Connecting...</div>
+        <!-- Top Controls Bar -->
+        <div class="top-controls">
+            <div class="status-display">
+                <div id="connectionStatus" class="connection-status">Local Mode</div>
+            </div>
+            <div class="theme-toggle-container">
+                <span class="theme-label">🌙</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="themeToggle">
+                    <span class="slider"></span>
+                </label>
+                <span class="theme-label">☀️</span>
+            </div>
+        </div>
         
         <!-- Message Container -->
         <div id="messageContainer" class="message" style="display: none;"></div>
@@ -137,22 +144,20 @@
 
         <!-- Scorekeeper Page -->
         <div id="scorekeeper" class="page">
-            <div class="header">
-                <h1>Scorekeeper Mode</h1>
-                <p>Session: <span id="scorekeeperSessionCode">------</span></p>
-            </div>
-
-            <div id="scorekeeperPlayers" class="players-grid"></div>
-            <div id="scorekeeperTeamScores"></div>
-            <div id="scorekeeperSpectatorInfo"></div>
-
-            <div class="player-actions">
-                <div class="action-buttons">
-                    <button onclick="showReport()" class="btn">📊 Show Report</button>
-                    <button onclick="resetAllScores()" class="btn btn-warning">🔄 Reset All</button>
-                    <button onclick="leaveSession()" class="btn btn-danger">🚪 End Session</button>
+            <div class="scorekeeper-header">
+                <div class="session-details">
+                    <h2 id="scorekeeperSessionName">Game Session</h2>
+                    <p>Session: <span id="scorekeeperSessionCode">------</span></p>
+                </div>
+                <div class="session-actions">
+                    <button onclick="showReport()" class="btn btn-secondary">📊 Report</button>
+                    <button onclick="leaveSession()" class="btn btn-danger">End Session</button>
                 </div>
             </div>
+
+            <div id="scorekeeperPlayers" class="player-grid"></div>
+            <div id="scorekeeperTeamScores"></div>
+            <div id="scorekeeperSpectatorInfo"></div>
         </div>
 
         <!-- Player View Page -->
