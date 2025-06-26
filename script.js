@@ -152,6 +152,52 @@ function setupFirebaseConnectionMonitoring() {
 }
 
 // Session Management
+function showSessionSuccessScreen(sessionCode, sessionName) {
+    const sessionCodeDisplay = document.getElementById('displaySessionCode');
+    const sessionNameDisplay = document.getElementById('displaySessionName');
+    const copyCodeButton = document.getElementById('copySessionCode');
+    const startScoringButton = document.getElementById('startScoringButton');
+    const setupTeamsButton = document.getElementById('setupTeamsButton');
+
+    if (sessionCodeDisplay) sessionCodeDisplay.textContent = sessionCode;
+    if (sessionNameDisplay) sessionNameDisplay.textContent = sessionName;
+
+    if (copyCodeButton) {
+        copyCodeButton.onclick = () => {
+            navigator.clipboard.writeText(sessionCode).then(() => {
+                showMessage('Session code copied!', 'success');
+            }).catch(err => {
+                console.error('Could not copy text: ', err);
+                showMessage('Failed to copy code.', 'error');
+            });
+        };
+    }
+
+    if (startScoringButton) {
+        startScoringButton.onclick = () => {
+            if (currentSession.isHost) {
+                showPage(PAGE_IDS.SCOREKEEPER);
+                updateScorekeeperInterface();
+            } else {
+                showMessage('Only the host can start scoring.', 'error');
+            }
+        };
+    }
+
+    if (setupTeamsButton) {
+        setupTeamsButton.onclick = () => {
+            if (currentSession.isHost) {
+                showPage(PAGE_IDS.TEAM_SETUP);
+                renderTeamSetup();
+            } else {
+                showMessage('Only the host can set up teams.', 'error');
+            }
+        };
+    }
+
+    showPage(PAGE_IDS.SESSION_SUCCESS);
+}
+
 async function handleCreateSession(event) {
     event.preventDefault();
     const createButton = document.getElementById('createSessionButton');
@@ -486,53 +532,6 @@ function setupRealtimeListeners(sessionCode) {
             leaveSession();
         }
     });
-}
-
-// UI Updates
-function showSessionSuccessScreen(sessionCode, sessionName) {
-    const sessionCodeDisplay = document.getElementById('displaySessionCode');
-    const sessionNameDisplay = document.getElementById('displaySessionName');
-    const copyCodeButton = document.getElementById('copySessionCode');
-    const startScoringButton = document.getElementById('startScoringButton');
-    const setupTeamsButton = document.getElementById('setupTeamsButton');
-
-    if (sessionCodeDisplay) sessionCodeDisplay.textContent = sessionCode;
-    if (sessionNameDisplay) sessionNameDisplay.textContent = sessionName;
-
-    if (copyCodeButton) {
-        copyCodeButton.onclick = () => {
-            navigator.clipboard.writeText(sessionCode).then(() => {
-                showMessage('Session code copied!', 'success');
-            }).catch(err => {
-                console.error('Could not copy text: ', err);
-                showMessage('Failed to copy code.', 'error');
-            });
-        };
-    }
-
-    if (startScoringButton) {
-        startScoringButton.onclick = () => {
-            if (currentSession.isHost) {
-                showPage(PAGE_IDS.SCOREKEEPER);
-                updateScorekeeperInterface();
-            } else {
-                showMessage('Only the host can start scoring.', 'error');
-            }
-        };
-    }
-
-    if (setupTeamsButton) {
-        setupTeamsButton.onclick = () => {
-            if (currentSession.isHost) {
-                showPage(PAGE_IDS.TEAM_SETUP);
-                renderTeamSetup();
-            } else {
-                showMessage('Only the host can set up teams.', 'error');
-            }
-        };
-    }
-
-    showPage(PAGE_IDS.SESSION_SUCCESS);
 }
 
 function updateScorekeeperInterface() {
