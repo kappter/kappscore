@@ -1,9 +1,4 @@
-// GameScore Pro - Enhanced with Team Management, Tile Colors, and Spectator Mode
-
-// Firebase Configuration (ensure firebase-config.js is loaded first)
-let db;
-let firebaseInitialized = false;
-let firebaseConnectionStatus = false; // true if online, false if offline
+// GameScore Pro - Enhanced with Teams, Colors, Spectator Mode, and Dark Mode
 
 // Current session data
 let currentSession = null;
@@ -78,10 +73,10 @@ function getRandomColor() {
 }
 
 function updateConnectionStatus(isConnected) {
-    firebaseConnectionStatus = isConnected;
+    window.firebaseConnectionStatus = isConnected;
     const statusElement = document.getElementById('connectionStatus');
     if (statusElement) {
-        if (firebaseInitialized) {
+        if (window.firebaseInitialized) {
             statusElement.textContent = isConnected ? 'Online' : 'Offline';
             statusElement.className = isConnected ? 'connection-status status-online' : 'connection-status status-offline';
         } else {
@@ -89,7 +84,7 @@ function updateConnectionStatus(isConnected) {
             statusElement.className = 'connection-status status-local';
         }
     }
-    console.log(`Connection status updated: ${firebaseInitialized ? (isConnected ? 'Online' : 'Offline') : 'Local Mode'}`);
+    console.log(`Connection status updated: ${window.firebaseInitialized ? (isConnected ? 'Online' : 'Offline') : 'Local Mode'}`);
 }
 
 // Firebase Initialization and Connection Monitoring
@@ -99,7 +94,7 @@ async function initializeFirebaseWithRetry(retries = 3, delay = 1000) {
     // Check if Firebase is loaded and configured
     if (typeof firebase === 'undefined') {
         console.log('Firebase SDK not available, running in local mode');
-        firebaseInitialized = false;
+        window.firebaseInitialized = false;
         updateConnectionStatus(false);
         return;
     }
@@ -109,7 +104,7 @@ async function initializeFirebaseWithRetry(retries = 3, delay = 1000) {
         firebaseConfig.apiKey === "your-api-key-here" || 
         firebaseConfig.databaseURL.includes("your-project-id")) {
         console.log('Firebase not configured with real credentials, running in local mode');
-        firebaseInitialized = false;
+        window.firebaseInitialized = false;
         updateConnectionStatus(false);
         return;
     }
@@ -118,10 +113,10 @@ async function initializeFirebaseWithRetry(retries = 3, delay = 1000) {
     for (let i = 1; i <= retries; i++) {
         console.log(`Firebase initialization attempt ${i}/${retries}`);
         try {
-            if (!firebaseInitialized) {
+            if (!window.firebaseInitialized) {
                 firebase.initializeApp(firebaseConfig);
-                db = firebase.database();
-                firebaseInitialized = true;
+                window.db = firebase.database();
+                window.firebaseInitialized = true;
                 setupFirebaseConnectionMonitoring();
                 console.log('Firebase initialized successfully!');
                 return;
@@ -130,7 +125,7 @@ async function initializeFirebaseWithRetry(retries = 3, delay = 1000) {
             console.log(`Firebase initialization attempt ${i} failed:`, error.message);
             if (i === retries) {
                 console.log('All Firebase initialization attempts failed, running in local mode');
-                firebaseInitialized = false;
+                window.firebaseInitialized = false;
                 updateConnectionStatus(false);
             } else {
                 await new Promise(resolve => setTimeout(resolve, delay));
@@ -140,11 +135,11 @@ async function initializeFirebaseWithRetry(retries = 3, delay = 1000) {
 }
 
 function setupFirebaseConnectionMonitoring() {
-    if (!firebaseInitialized || !db) return;
+    if (!window.firebaseInitialized || !window.db) return;
     
     console.log('Setting up Firebase connection monitoring...');
     try {
-        const connectedRef = db.ref('.info/connected');
+        const connectedRef = window.db.ref('.info/connected');
         connectedRef.on('value', snap => {
             const isConnected = snap.val();
             console.log('Firebase connection status changed:', isConnected);
@@ -218,7 +213,7 @@ async function handleCreateSession(event) {
     console.log('Creating session...');
     console.log('Generated session code:', sessionCode);
 
-    if (firebaseInitialized && firebaseConnectionStatus) {
+    if (window.firebaseInitialized && window.firebaseConnectionStatus) {
         await saveSessionToFirebase(sessionCode, currentSession);
         showMessage('Session created and saved online!', 'success');
     } else {
@@ -238,17 +233,18 @@ async function handleCreateSession(event) {
     }
 }
 
-async function saveSessionToFirebase(code, sessionData) {
-    if (!firebaseInitialized || !firebaseConnectionStatus) {
-        console.warn('Firebase not available, cannot save session.');
+async function saveSessionToFirebase(sessionCode, sessionData) {
+    if (!window.firebaseInitialized || !window.db) {
+        console.log('Firebase not available, skipping save');
         return;
     }
+    
     try {
-        await db.ref(`sessions/${code}`).set(sessionData);
+        await window.db.ref(`sessions/${sessionCode}`).set(sessionData);
         console.log('Session saved to Firebase successfully');
     } catch (error) {
         console.error('Error saving session to Firebase:', error);
-        showMessage('Error saving session to Firebase. Please try again.', 'error');
+        showMessage('Failed to save session online, but local session is ready', 'warning');
     }
 }
 
@@ -260,13 +256,13 @@ async function joinSession(sessionCode, playerName, playerColor, asSpectator = f
 
     sessionCode = sessionCode.toUpperCase();
 
-    if (!firebaseInitialized || !firebaseConnectionStatus) {
+    if (!window.firebaseInitialized || !window.firebaseConnectionStatus) {
         showMessage('Cannot join session - Firebase not connected. Please wait and try again.', 'error');
         return;
     }
 
     try {
-        const snapshot = await db.ref(`sessions/${sessionCode}`).once('value');
+        const snapshot = await window.db.ref(`sessions/${sessionCode}`).once('value');
         if (snapshot.exists()) {
             const sessionData = snapshot.val();
             currentSession = {...sessionData, isHost: false};
