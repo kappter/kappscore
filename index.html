@@ -201,16 +201,42 @@
         <!-- Team Setup Page -->
         <div id="teamSetup" class="page">
             <div class="header">
-                <h1>Team Setup</h1>
+                <h1>👥 Team Setup</h1>
                 <p>Drag players to create teams</p>
             </div>
 
-            <div id="teamSetupContainer">
-                <!-- Team setup interface will be generated here -->
-            </div>
+            <div class="team-setup-container">
+                <div class="players-section">
+                    <h3 class="section-title">
+                        <span>👤</span>
+                        Available Players
+                    </h3>
+                    <div id="availablePlayers" class="available-players">
+                        <!-- Available players will be rendered here -->
+                    </div>
+                </div>
 
-            <div class="team-actions">
-                <button onclick="showPage('sessionSuccess')" class="btn btn-secondary">← Back to Session</button>
+                <div class="teams-section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3 class="section-title">
+                            <span>🏆</span>
+                            Teams
+                        </h3>
+                        <button id="createTeamBtn" class="create-team-btn">
+                            <span>➕</span>
+                            Create New Team
+                        </button>
+                    </div>
+                    <div id="teamsContainer" class="teams-grid">
+                        <!-- Teams will be rendered here -->
+                    </div>
+                </div>
+
+                <div class="team-actions">
+                    <button onclick="saveTeamConfiguration()" class="btn">💾 Save Team Setup</button>
+                    <button onclick="clearAllTeams()" class="btn btn-warning">🗑️ Clear All Teams</button>
+                    <button onclick="showPage('sessionSuccess')" class="btn btn-secondary">← Back to Session</button>
+                </div>
             </div>
         </div>
 

@@ -257,7 +257,66 @@ async function joinSession(sessionCode, playerName, playerColor, asSpectator = f
     sessionCode = sessionCode.toUpperCase();
 
     if (!window.firebaseInitialized || !window.firebaseConnectionStatus) {
-        showMessage('Cannot join session - Firebase not connected. Please wait and try again.', 'error');
+        showMessage('⚠️ Local Mode Limitation: You can only join sessions created on this same device. For multi-device sessions, Firebase configuration is required.', 'warning');
+        
+        // Check if there's a local session with this code
+        const localSessionKey = `gameScore_session_${sessionCode}`;
+        const localSession = localStorage.getItem(localSessionKey);
+        
+        if (localSession) {
+            try {
+                currentSession = JSON.parse(localSession);
+                currentSession.isHost = false;
+                
+                if (asSpectator) {
+                    // Join as spectator
+                    isSpectator = true;
+                    currentPlayerId = null;
+                    currentPlayerName = playerName || 'Spectator';
+                    
+                    // Add to spectators list
+                    if (!currentSession.spectators) currentSession.spectators = [];
+                    const spectatorId = 'spectator-' + Date.now();
+                    currentSession.spectators.push({
+                        id: spectatorId,
+                        name: currentPlayerName,
+                        joinedAt: Date.now()
+                    });
+                    
+                    // Save updated session
+                    localStorage.setItem(localSessionKey, JSON.stringify(currentSession));
+                    
+                    showMessage(`Joined as spectator: ${currentPlayerName}`, 'success');
+                    showPage(PAGE_IDS.SPECTATOR_VIEW);
+                    updateSpectatorView();
+                } else {
+                    // Join as player - find empty slot
+                    const emptyPlayerIndex = currentSession.players.findIndex(p => !p.name || p.name.startsWith('Player '));
+                    
+                    if (emptyPlayerIndex !== -1) {
+                        currentSession.players[emptyPlayerIndex].name = playerName;
+                        currentSession.players[emptyPlayerIndex].color = playerColor;
+                        currentPlayerId = currentSession.players[emptyPlayerIndex].id;
+                        currentPlayerName = playerName;
+                        currentPlayerTileColor = playerColor;
+                        
+                        // Save updated session
+                        localStorage.setItem(localSessionKey, JSON.stringify(currentSession));
+                        
+                        showMessage(`Joined as player: ${playerName}`, 'success');
+                        showPage(PAGE_IDS.PLAYER_VIEW);
+                        updatePlayerView();
+                    } else {
+                        showMessage('Session is full. All player slots are taken.', 'error');
+                    }
+                }
+            } catch (error) {
+                console.error('Error parsing local session:', error);
+                showMessage('Invalid session data found locally.', 'error');
+            }
+        } else {
+            showMessage('Session not found on this device. In Local Mode, you can only join sessions created on the same device.', 'error');
+        }
         return;
     }
 
@@ -328,8 +387,8 @@ async function joinSession(sessionCode, playerName, playerColor, asSpectator = f
 function leaveSession() {
     if (currentSession && currentSession.code) {
         if (currentSession.isHost) {
-            if (firebaseInitialized && firebaseConnectionStatus) {
-                db.ref(`sessions/${currentSession.code}`).remove()
+            if (window.firebaseInitialized && window.firebaseConnectionStatus) {
+                window.db.ref(`sessions/${currentSession.code}`).remove()
                     .then(() => {
                         console.log('Session deleted from Firebase.');
                         showMessage('Session ended and deleted.', 'info');
@@ -338,18 +397,30 @@ function leaveSession() {
                         console.error('Error deleting session:', error);
                         showMessage('Error deleting session.', 'error');
                     });
+            } else {
+                // Local mode - remove from localStorage
+                const localSessionKey = `gameScore_session_${currentSession.code}`;
+                localStorage.removeItem(localSessionKey);
+                showMessage('Session ended (local mode).', 'info');
             }
         } else if (isSpectator) {
             // Remove from spectators list
-            if (firebaseInitialized && firebaseConnectionStatus && currentSession.spectators) {
+            if (window.firebaseInitialized && window.firebaseConnectionStatus && currentSession.spectators) {
                 const updatedSpectators = currentSession.spectators.filter(s => s.name !== currentPlayerName);
-                db.ref(`sessions/${currentSession.code}/spectators`).set(updatedSpectators);
+                window.db.ref(`sessions/${currentSession.code}/spectators`).set(updatedSpectators);
+            } else {
+                // Local mode - update localStorage
+                if (currentSession.spectators) {
+                    currentSession.spectators = currentSession.spectators.filter(s => s.name !== currentPlayerName);
+                    const localSessionKey = `gameScore_session_${currentSession.code}`;
+                    localStorage.setItem(localSessionKey, JSON.stringify(currentSession));
+                }
             }
             showMessage('You have left the session.', 'info');
         } else {
             // Player leaves
-            if (firebaseInitialized && firebaseConnectionStatus && currentPlayerId) {
-                const playerRef = db.ref(`sessions/${currentSession.code}/players`);
+            if (window.firebaseInitialized && window.firebaseConnectionStatus && currentPlayerId) {
+                const playerRef = window.db.ref(`sessions/${currentSession.code}/players`);
                 playerRef.once('value', snapshot => {
                     const players = snapshot.val();
                     const playerIndex = players.findIndex(p => p.id === currentPlayerId);
@@ -358,20 +429,32 @@ function leaveSession() {
                         playerRef.set(players);
                     }
                 });
+            } else {
+                // Local mode - update localStorage
+                if (currentPlayerId) {
+                    const playerIndex = currentSession.players.findIndex(p => p.id === currentPlayerId);
+                    if (playerIndex !== -1) {
+                        currentSession.players[playerIndex].status = 'left';
+                        const localSessionKey = `gameScore_session_${currentSession.code}`;
+                        localStorage.setItem(localSessionKey, JSON.stringify(currentSession));
+                    }
+                }
             }
-            showMessage('You have left the session.', 'info');
-        }
     }
     
+    // Reset session variables
+    const sessionCode = currentSession?.code;
     currentSession = null;
     currentPlayerId = null;
     currentPlayerName = "Guest";
     currentPlayerTileColor = '#007bff';
     isSpectator = false;
     
-    if (db && currentSession?.code) {
-        db.ref(`sessions/${currentSession.code}`).off();
+    // Clean up Firebase listeners if they exist
+    if (window.db && sessionCode) {
+        window.db.ref(`sessions/${sessionCode}`).off();
     }
+    
     showPage(PAGE_IDS.LANDING);
 }
 
@@ -905,35 +988,56 @@ function calculateTeamScore(playerIds) {
 }
 
 function renderTeamSetup() {
-    const teamSetupContainer = document.getElementById('teamSetupContainer');
-    if (!teamSetupContainer) return;
-
-    teamSetupContainer.innerHTML = `
-        <h2>Team Setup</h2>
-        <div id="availablePlayers" class="player-pool">
-            <h3>Available Players</h3>
-            <div id="playerPool"></div>
-        </div>
-        <div id="teamsContainer">
-            <h3>Teams</h3>
-            <button id="createTeamButton" class="create-team-btn">Create New Team</button>
-            <div id="teamsList"></div>
-        </div>
-        <div class="team-actions">
-            <button onclick="saveTeamConfiguration()" class="save-teams-btn">Save Team Configuration</button>
-            <button onclick="clearAllTeams()" class="clear-teams-btn">Clear All Teams</button>
-        </div>
-    `;
-
-    renderPlayerPool();
+    renderAvailablePlayers();
     renderTeamsList();
     
-    document.getElementById('createTeamButton').onclick = createNewTeam;
+    const createTeamBtn = document.getElementById('createTeamBtn');
+    if (createTeamBtn) {
+        createTeamBtn.onclick = createNewTeam;
+    }
 }
 
-function renderPlayerPool() {
-    const playerPool = document.getElementById('playerPool');
-    if (!playerPool) return;
+function renderAvailablePlayers() {
+    const availablePlayersContainer = document.getElementById('availablePlayers');
+    if (!availablePlayersContainer) return;
+
+    availablePlayersContainer.innerHTML = '';
+    
+    currentSession.players.forEach(player => {
+        const isInTeam = Object.values(currentSession.teams || {}).some(team => 
+            team.players.includes(player.id)
+        );
+        
+        if (!isInTeam) {
+            const playerCard = document.createElement('div');
+            playerCard.className = 'player-card';
+            playerCard.draggable = true;
+            playerCard.dataset.playerId = player.id;
+            
+            playerCard.innerHTML = `
+                <div class="player-avatar" style="background-color: ${player.color}">
+                    ${player.name.charAt(0).toUpperCase()}
+                </div>
+                <div class="player-name">${player.name}</div>
+            `;
+            
+            // Add drag event listeners
+            playerCard.addEventListener('dragstart', handleDragStart);
+            playerCard.addEventListener('dragend', handleDragEnd);
+            
+            availablePlayersContainer.appendChild(playerCard);
+        }
+    });
+    
+    if (availablePlayersContainer.children.length === 0) {
+        availablePlayersContainer.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">👥</div>
+                <p>All players are assigned to teams</p>
+            </div>
+        `;
+    }
+}
 
     playerPool.innerHTML = '';
     
@@ -960,36 +1064,64 @@ function renderPlayerPool() {
 }
 
 function renderTeamsList() {
-    const teamsList = document.getElementById('teamsList');
-    if (!teamsList) return;
+    const teamsContainer = document.getElementById('teamsContainer');
+    if (!teamsContainer) return;
 
-    teamsList.innerHTML = '';
+    teamsContainer.innerHTML = '';
     
-    Object.entries(currentSession.teams || {}).forEach(([teamId, team]) => {
-        const teamElement = document.createElement('div');
-        teamElement.className = 'team-container';
-        teamElement.style.borderColor = team.color;
+    const teams = currentSession.teams || {};
+    
+    if (Object.keys(teams).length === 0) {
+        teamsContainer.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">🏆</div>
+                <p>No teams created yet</p>
+                <p style="font-size: 0.875rem; opacity: 0.7;">Click "Create New Team" to get started</p>
+            </div>
+        `;
+        return;
+    }
+    
+    Object.entries(teams).forEach(([teamId, team]) => {
+        const teamCard = document.createElement('div');
+        teamCard.className = 'team-card';
         
-        teamElement.innerHTML = `
+        teamCard.innerHTML = `
             <div class="team-header">
-                <input type="text" value="${team.name}" onchange="updateTeamName('${teamId}', this.value)" class="team-name-input">
-                <input type="color" value="${team.color}" onchange="updateTeamColor('${teamId}', this.value)" class="team-color-picker">
-                <button onclick="deleteTeam('${teamId}')" class="delete-team-btn">×</button>
+                <input type="text" value="${team.name}" onchange="updateTeamName('${teamId}', this.value)" 
+                       class="team-name" style="background: transparent; border: none; font-size: 1.125rem; font-weight: 600; color: var(--text-primary); width: 100%;">
+                <div class="team-badge">${team.players.length} players</div>
             </div>
-            <div class="team-players" ondrop="dropPlayer(event, '${teamId}')" ondragover="allowDrop(event)">
-                ${team.players.map(playerId => {
-                    const player = currentSession.players.find(p => p.id === playerId);
-                    return player ? `
-                        <div class="team-player" draggable="true" ondragstart="dragTeamPlayer(event, '${playerId}')" style="background-color: ${player.color}">
-                            ${player.name}
-                        </div>
-                    ` : '';
-                }).join('')}
+            <div class="team-players" 
+                 ondrop="dropPlayer(event, '${teamId}')" 
+                 ondragover="allowDrop(event)"
+                 data-team-id="${teamId}">
+                ${team.players.length === 0 ? 
+                    '<div style="text-align: center; color: var(--text-muted); padding: 2rem;">Drop players here</div>' :
+                    team.players.map(playerId => {
+                        const player = currentSession.players.find(p => p.id === playerId);
+                        return player ? `
+                            <div class="team-player" draggable="true" ondragstart="dragTeamPlayer(event, '${playerId}')">
+                                <div class="player-avatar" style="background-color: ${player.color}; width: 2rem; height: 2rem; font-size: 0.875rem;">
+                                    ${player.name.charAt(0).toUpperCase()}
+                                </div>
+                                <span>${player.name}</span>
+                            </div>
+                        ` : '';
+                    }).join('')
+                }
             </div>
-            <div class="team-score">Team Score: ${calculateTeamScore(team.players).toFixed(currentSession.allowDecimals ? 1 : 0)}</div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                <div style="font-weight: 500; color: var(--text-secondary);">
+                    Team Score: ${calculateTeamScore(team.players).toFixed(currentSession.allowDecimals ? 1 : 0)}
+                </div>
+                <button onclick="deleteTeam('${teamId}')" class="btn btn-danger" style="padding: 0.5rem; font-size: 0.875rem;">
+                    🗑️ Delete
+                </button>
+            </div>
         `;
         
-        teamsList.appendChild(teamElement);
+        teamsContainer.appendChild(teamCard);
     });
 }
 
