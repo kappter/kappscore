@@ -739,7 +739,13 @@ function showPlayerView(playerId) {
                 
                 .player-actions {
                     text-align: center;
-                    margin: 20px 0;
+                    margin: 30px 0;
+                    padding: 20px;
+                    background: #f8f9fa;
+                    border-radius: 10px;
+                    position: relative;
+                    z-index: 100;
+                    clear: both;
                 }
                 
                 .action-btn {
@@ -750,7 +756,10 @@ function showPlayerView(playerId) {
                     border-radius: 8px;
                     cursor: pointer;
                     font-size: 16px;
-                    margin: 0 10px;
+                    margin: 5px 10px;
+                    display: inline-block;
+                    position: relative;
+                    z-index: 101;
                 }
                 
                 .action-btn:hover {
@@ -783,7 +792,7 @@ function showPlayerView(playerId) {
                         playersGrid.innerHTML = generatePlayerViewTiles(playerId);
                     }
                     
-                    // Update player badge
+                    // Update player badge with current player info
                     const playerBadge = document.querySelector('.player-badge');
                     if (playerBadge) {
                         const currentPlayer = players.find(p => p.id === playerId);
@@ -792,12 +801,21 @@ function showPlayerView(playerId) {
                         }
                     }
                     
-                    // Update header if game ended
+                    // Update header info
                     const playerHeader = document.querySelector('.player-header');
-                    if (playerHeader && currentSession.gameEnded) {
-                        const existingGameEnded = playerHeader.querySelector('.game-ended');
-                        if (!existingGameEnded) {
-                            playerHeader.innerHTML += `<div class="game-ended">🏆 Game Won by ${currentSession.winner}!</div>`;
+                    if (playerHeader) {
+                        // Update session info
+                        const sessionInfo = playerHeader.querySelector('p');
+                        if (sessionInfo) {
+                            sessionInfo.innerHTML = `<strong>Session: ${currentSession.code}</strong> | ${currentSession.name}<br>Target Score: ${currentSession.targetScore} | Scores update automatically`;
+                        }
+                        
+                        // Add game ended message if needed
+                        if (currentSession.gameEnded) {
+                            const existingGameEnded = playerHeader.querySelector('.game-ended');
+                            if (!existingGameEnded) {
+                                playerHeader.innerHTML += `<div class="game-ended">🏆 Game Won by ${currentSession.winner}!</div>`;
+                            }
                         }
                     }
                     
@@ -806,6 +824,8 @@ function showPlayerView(playerId) {
                     if (lastUpdated) {
                         lastUpdated.textContent = new Date().toLocaleTimeString();
                     }
+                    
+                    console.log('Player view updated - Players:', players.map(p => `${p.name} (${p.isAssigned ? 'Joined' : 'Waiting'})`));
                 }
             });
         }
