@@ -1301,10 +1301,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     await initializeFirebaseWithRetry();
     
     // Bind event listeners
-    const createButton = document.getElementById('createSessionBtn');
+    const createButton = document.getElementById('createNewSessionBtn');
     if (createButton) {
         createButton.onclick = () => showPage(PAGE_IDS.CREATE_SESSION);
         console.log('Create button bound');
+    } else {
+        console.log('Create button not found');
     }
 
     const joinButton = document.getElementById('joinSessionBtn');
