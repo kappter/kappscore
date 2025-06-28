@@ -151,6 +151,66 @@ function setupFirebaseConnectionMonitoring() {
     }
 }
 
+// UI Update Functions
+function updateScorekeeperInterface() {
+    if (!currentSession) return;
+
+    // Update session info in header
+    const sessionNameElement = document.getElementById('scorekeeperSessionName');
+    const sessionCodeElement = document.getElementById('scorekeeperSessionCode');
+    
+    if (sessionNameElement) {
+        sessionNameElement.textContent = currentSession.name || 'Game Session';
+    }
+    if (sessionCodeElement) {
+        sessionCodeElement.textContent = currentSession.code || '------';
+    }
+
+    // Update players grid
+    const playersContainer = document.getElementById('playersContainer');
+    if (!playersContainer) return;
+
+    playersContainer.innerHTML = '';
+
+    currentSession.players.forEach(player => {
+        const playerTile = document.createElement('div');
+        playerTile.className = 'player-tile';
+        playerTile.id = `player-${player.id}`;
+        
+        if (player.id === currentPlayerId) {
+            playerTile.classList.add('current-player');
+        }
+
+        playerTile.innerHTML = `
+            <div class="player-name">
+                ${player.name}
+                ${player.id === currentPlayerId ? '<span class="player-badge">You</span>' : ''}
+            </div>
+            <div class="player-score" style="color: ${player.color}">${player.score}</div>
+            ${currentSession.isHost ? `
+                <div class="score-controls">
+                    <button class="score-btn negative" onclick="updateScore('${player.id}', -10)">-10</button>
+                    <button class="score-btn negative" onclick="updateScore('${player.id}', -5)">-5</button>
+                    <button class="score-btn negative" onclick="updateScore('${player.id}', -1)">-1</button>
+                    <button class="score-btn" onclick="showCustomScoreInput('${player.id}')">1</button>
+                    <button class="score-btn positive" onclick="updateScore('${player.id}', 1)">+</button>
+                    <button class="score-btn positive" onclick="updateScore('${player.id}', 5)">+5</button>
+                    <button class="score-btn positive" onclick="updateScore('${player.id}', 10)">+10</button>
+                </div>
+                <div class="color-picker">
+                    ${COLOR_PALETTE.map(color => `
+                        <div class="color-option ${player.color === color ? 'selected' : ''}" 
+                             style="background-color: ${color}"
+                             onclick="updatePlayerColor('${player.id}', '${color}')"></div>
+                    `).join('')}
+                </div>
+            ` : ''}
+        `;
+
+        playersContainer.appendChild(playerTile);
+    });
+}
+
 // Session Management
 function showSessionSuccessScreen(sessionCode, sessionName) {
     const sessionCodeDisplay = document.getElementById('displaySessionCode');
@@ -175,9 +235,16 @@ function showSessionSuccessScreen(sessionCode, sessionName) {
 
     if (startScoringButton) {
         startScoringButton.onclick = () => {
+            console.log('Start scoring button clicked');
+            console.log('Current session:', currentSession);
+            console.log('updateScorekeeperInterface function:', typeof updateScorekeeperInterface);
             if (currentSession.isHost) {
-                showPage(PAGE_IDS.SCOREKEEPER);
-                updateScorekeeperInterface();
+                showPage('scorekeeper');
+                if (typeof updateScorekeeperInterface === 'function') {
+                    updateScorekeeperInterface();
+                } else {
+                    console.error('updateScorekeeperInterface is not a function');
+                }
             } else {
                 showMessage('Only the host can start scoring.', 'error');
             }
@@ -531,65 +598,6 @@ function setupRealtimeListeners(sessionCode) {
             showMessage('The host has ended the session.', 'info');
             leaveSession();
         }
-    });
-}
-
-function updateScorekeeperInterface() {
-    if (!currentSession) return;
-
-    // Update session info in header
-    const sessionNameElement = document.getElementById('scorekeeperSessionName');
-    const sessionCodeElement = document.getElementById('scorekeeperSessionCode');
-    
-    if (sessionNameElement) {
-        sessionNameElement.textContent = currentSession.name || 'Game Session';
-    }
-    if (sessionCodeElement) {
-        sessionCodeElement.textContent = currentSession.code || '------';
-    }
-
-    // Update players grid
-    const playersContainer = document.getElementById('playersContainer');
-    if (!playersContainer) return;
-
-    playersContainer.innerHTML = '';
-
-    currentSession.players.forEach(player => {
-        const playerTile = document.createElement('div');
-        playerTile.className = 'player-tile';
-        playerTile.id = `player-${player.id}`;
-        
-        if (player.id === currentPlayerId) {
-            playerTile.classList.add('current-player');
-        }
-
-        playerTile.innerHTML = `
-            <div class="player-name">
-                ${player.name}
-                ${player.id === currentPlayerId ? '<span class="player-badge">You</span>' : ''}
-            </div>
-            <div class="player-score" style="color: ${player.color}">${player.score}</div>
-            ${currentSession.isHost ? `
-                <div class="score-controls">
-                    <button class="score-btn negative" onclick="updateScore('${player.id}', -10)">-10</button>
-                    <button class="score-btn negative" onclick="updateScore('${player.id}', -5)">-5</button>
-                    <button class="score-btn negative" onclick="updateScore('${player.id}', -1)">-1</button>
-                    <button class="score-btn" onclick="showCustomScoreInput('${player.id}')">1</button>
-                    <button class="score-btn positive" onclick="updateScore('${player.id}', 1)">+</button>
-                    <button class="score-btn positive" onclick="updateScore('${player.id}', 5)">+5</button>
-                    <button class="score-btn positive" onclick="updateScore('${player.id}', 10)">+10</button>
-                </div>
-                <div class="color-picker">
-                    ${COLOR_PALETTE.map(color => `
-                        <div class="color-option ${player.color === color ? 'selected' : ''}" 
-                             style="background-color: ${color}"
-                             onclick="updatePlayerColor('${player.id}', '${color}')"></div>
-                    `).join('')}
-                </div>
-            ` : ''}
-        `;
-
-        playersContainer.appendChild(playerTile);
     });
 }
 
@@ -1301,9 +1309,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     await initializeFirebaseWithRetry();
     
     // Bind event listeners
+    console.log('Starting button binding...');
     const createButton = document.getElementById('createNewSessionBtn');
+    console.log('Create button element:', createButton);
     if (createButton) {
-        createButton.onclick = () => showPage(PAGE_IDS.CREATE_SESSION);
+        createButton.onclick = () => {
+            console.log('Create button clicked, navigating to createSession');
+            showPage('createSession');
+        };
         console.log('Create button bound');
     } else {
         console.log('Create button not found');
