@@ -535,9 +535,9 @@ function setupRealtimeListeners(sessionCode) {
 }
 
 function updateScorekeeperInterface() {
-    if (!currentSession || !currentSession.isHost) return;
+    if (!currentSession) return;
 
-    // Update session info
+    // Update session info in header
     const sessionNameElement = document.getElementById('scorekeeperSessionName');
     const sessionCodeElement = document.getElementById('scorekeeperSessionCode');
     
@@ -547,6 +547,54 @@ function updateScorekeeperInterface() {
     if (sessionCodeElement) {
         sessionCodeElement.textContent = currentSession.code || '------';
     }
+
+    // Update players grid
+    const playersContainer = document.getElementById('playersContainer');
+    if (!playersContainer) return;
+
+    playersContainer.innerHTML = '';
+
+    currentSession.players.forEach(player => {
+        const playerTile = document.createElement('div');
+        playerTile.className = 'player-tile';
+        playerTile.id = `player-${player.id}`;
+        
+        if (player.id === currentPlayerId) {
+            playerTile.classList.add('current-player');
+        }
+
+        playerTile.innerHTML = `
+            <div class="player-name">
+                ${player.name}
+                ${player.id === currentPlayerId ? '<span class="player-badge">You</span>' : ''}
+            </div>
+            <div class="player-score" style="color: ${player.color}">${player.score}</div>
+            ${currentSession.isHost ? `
+                <div class="score-controls">
+                    <button class="score-btn negative" onclick="updateScore('${player.id}', -10)">-10</button>
+                    <button class="score-btn negative" onclick="updateScore('${player.id}', -5)">-5</button>
+                    <button class="score-btn negative" onclick="updateScore('${player.id}', -1)">-1</button>
+                    <button class="score-btn" onclick="showCustomScoreInput('${player.id}')">1</button>
+                    <button class="score-btn positive" onclick="updateScore('${player.id}', 1)">+</button>
+                    <button class="score-btn positive" onclick="updateScore('${player.id}', 5)">+5</button>
+                    <button class="score-btn positive" onclick="updateScore('${player.id}', 10)">+10</button>
+                </div>
+                <div class="color-picker">
+                    ${COLOR_PALETTE.map(color => `
+                        <div class="color-option ${player.color === color ? 'selected' : ''}" 
+                             style="background-color: ${color}"
+                             onclick="updatePlayerColor('${player.id}', '${color}')"></div>
+                    `).join('')}
+                </div>
+            ` : ''}
+        `;
+
+        playersContainer.appendChild(playerTile);
+    });
+}
+
+// Score Management Functions
+function updateScore(playerId, change) {
 
     const scorekeeperPlayersContainer = document.getElementById('scorekeeperPlayers');
     if (!scorekeeperPlayersContainer) return;
