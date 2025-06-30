@@ -330,6 +330,9 @@ async function handleCreateSession(event) {
         await saveSessionToFirebase(sessionCode, currentSession);
         showMessage('Session created and saved online!', 'success');
     } else {
+        // Save to localStorage for local mode
+        const localSessionKey = `gameScore_session_${sessionCode}`;
+        localStorage.setItem(localSessionKey, JSON.stringify(currentSession));
         showMessage('Session created locally (offline mode)', 'warning');
     }
 
@@ -400,7 +403,7 @@ async function joinSession(sessionCode, playerName, playerColor, asSpectator = f
                     localStorage.setItem(localSessionKey, JSON.stringify(currentSession));
                     
                     showMessage(`Joined as spectator: ${currentPlayerName}`, 'success');
-                    showPage(PAGE_IDS.SPECTATOR_VIEW);
+                    showPage('spectatorView');
                     updateSpectatorView();
                 } else {
                     // Join as player - find empty slot
@@ -417,7 +420,7 @@ async function joinSession(sessionCode, playerName, playerColor, asSpectator = f
                         localStorage.setItem(localSessionKey, JSON.stringify(currentSession));
                         
                         showMessage(`Joined as player: ${playerName}`, 'success');
-                        showPage(PAGE_IDS.PLAYER_VIEW);
+                        showPage('playerView');
                         updatePlayerView();
                     } else {
                         showMessage('Session is full. All player slots are taken.', 'error');
@@ -601,9 +604,8 @@ function setupRealtimeListeners(sessionCode) {
     });
 }
 
-// Score Management Functions
-function updateScore(playerId, change) {
-
+// Score Management Functions - Interface Updates
+function updateScorekeeperInterfacePlayers() {
     const scorekeeperPlayersContainer = document.getElementById('scorekeeperPlayers');
     if (!scorekeeperPlayersContainer) return;
 
@@ -884,7 +886,7 @@ function displaySpectatorInfo(containerId) {
     }
 }
 
-// Score Logic
+// Score Logic - Make globally accessible
 async function updateScore(playerId, amount) {
     if (!currentSession || !currentSession.isHost) return;
 
@@ -906,9 +908,15 @@ async function updateScore(playerId, amount) {
 
     console.log(`Player ${playerId} score changed by ${amount} to ${newScore}`);
 
-    if (firebaseInitialized && firebaseConnectionStatus) {
+    // Save to localStorage for local mode
+    if (currentSession.code) {
+        const localSessionKey = `gameScore_session_${currentSession.code}`;
+        localStorage.setItem(localSessionKey, JSON.stringify(currentSession));
+    }
+
+    if (window.firebaseInitialized && window.firebaseConnectionStatus) {
         try {
-            await db.ref(`sessions/${currentSession.code}`).update({
+            await window.db.ref(`sessions/${currentSession.code}`).update({
                 players: currentSession.players,
                 lastUpdated: currentSession.lastUpdated
             });
@@ -920,6 +928,9 @@ async function updateScore(playerId, amount) {
         updateScorekeeperInterface();
     }
 }
+
+// Make updateScore globally accessible
+window.updateScore = updateScore;
 
 async function updatePlayerColor(playerId, newColor) {
     if (!currentSession) return;
@@ -940,9 +951,15 @@ async function updatePlayerColor(playerId, newColor) {
         currentPlayerTileColor = newColor;
     }
 
-    if (firebaseInitialized && firebaseConnectionStatus) {
+    // Save to localStorage for local mode
+    if (currentSession.code) {
+        const localSessionKey = `gameScore_session_${currentSession.code}`;
+        localStorage.setItem(localSessionKey, JSON.stringify(currentSession));
+    }
+
+    if (window.firebaseInitialized && window.firebaseConnectionStatus) {
         try {
-            await db.ref(`sessions/${currentSession.code}`).update({
+            await window.db.ref(`sessions/${currentSession.code}`).update({
                 players: currentSession.players,
                 lastUpdated: currentSession.lastUpdated
             });
@@ -958,6 +975,9 @@ async function updatePlayerColor(playerId, newColor) {
         }
     }
 }
+
+// Make updatePlayerColor globally accessible
+window.updatePlayerColor = updatePlayerColor;
 
 async function resetPlayerScore(playerId) {
     if (!currentSession || !currentSession.isHost) return;
@@ -991,6 +1011,21 @@ async function resetPlayerScore(playerId) {
         updateScorekeeperInterface();
     }
 }
+
+function showCustomScoreInput(playerId) {
+    const customAmount = prompt('Enter custom score amount (positive or negative):');
+    if (customAmount !== null && customAmount.trim() !== '') {
+        const amount = parseFloat(customAmount);
+        if (!isNaN(amount)) {
+            updateScore(playerId, amount);
+        } else {
+            showMessage('Please enter a valid number.', 'error');
+        }
+    }
+}
+
+// Make showCustomScoreInput globally accessible
+window.showCustomScoreInput = showCustomScoreInput;
 
 async function editPlayerName(playerId, currentName) {
     if (!currentSession) return;
@@ -1237,6 +1272,9 @@ function deleteTeam(teamId) {
     }
 }
 
+// Make deleteTeam globally accessible
+window.deleteTeam = deleteTeam;
+
 function clearAllTeams() {
     if (confirm('Are you sure you want to clear all teams?')) {
         currentSession.teams = {};
@@ -1352,32 +1390,47 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         };
         console.log('Join form bound');
-    }
-
-    // Theme toggle button
+      // Theme toggle
     const themeToggle = document.getElementById('themeToggle');
     if (themeToggle) {
-        themeToggle.onchange = toggleTheme;
+        themeToggle.addEventListener('change', toggleTheme);
         console.log('Theme toggle bound');
     }
 
-    // Spectator join button
-    const spectatorJoinButton = document.getElementById('spectatorJoinBtn');
-    if (spectatorJoinButton) {
-        spectatorJoinButton.onclick = () => {
-            const joinCodeInput = document.getElementById('joinCode');
-            const spectatorNameInput = document.getElementById('joinPlayerName');
-            
+    // Spectator button
+    const spectatorButton = document.getElementById('spectatorBtn');
+    console.log('Looking for spectator button:', spectatorButton);
+    if (spectatorButton) {
+        spectatorButton.onclick = () => {
+            console.log('Spectator button clicked');
+            showPage('spectatorJoin');
+        };
+        console.log('Spectator button bound');
+    } else {
+        console.log('Spectator button not found!');
+    }
+
+    // Spectator join form
+    const spectatorJoinForm = document.getElementById('spectatorJoinForm');
+    if (spectatorJoinForm) {
+        spectatorJoinForm.onsubmit = (event) => {
+            event.preventDefault();
+            const joinCodeInput = document.getElementById('spectatorSessionCode');
             const joinCode = joinCodeInput ? joinCodeInput.value.trim() : '';
-            const spectatorName = spectatorNameInput ? spectatorNameInput.value.trim() : 'Spectator';
             
             if (joinCode) {
+                if (!window.firebaseInitialized || !window.firebaseConnectionStatus) {
+                    showMessage('Spectator mode requires Firebase connection. Currently running in local mode where sessions are only available on the host device.', 'error');
+                    return;
+                }
+                
+                const spectatorName = 'Spectator-' + Date.now().toString().slice(-4);
                 joinSession(joinCode.toUpperCase(), spectatorName, '#000000', true);
             } else {
                 showMessage('Please enter session code to join as spectator.', 'error');
             }
         };
-        console.log('Spectator button bound');
+        console.log('Spectator join form bound');
     }
 
     // Player count controls
