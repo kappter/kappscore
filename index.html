@@ -4,273 +4,239 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GameScore Pro</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
-    <div class="container">
-        <!-- Header -->
-        <header class="header">
-            <div class="logo">
-                🎮 GameScore Pro
-            </div>
-            <div class="status-controls">
-                <div id="connectionStatus" class="connection-status local">Local Mode</div>
-                <label class="theme-toggle">
-                    <input type="checkbox" id="themeToggle">
-                    <span class="theme-slider">
-                        <span>🌙</span>
-                        <span>☀️</span>
-                    </span>
-                </label>
-            </div>
-        </header>
-
-        <!-- Main Content -->
-        <main class="main-content">
-            <!-- Landing Page -->
-            <div id="landing" class="page active">
-                <div class="landing-content">
-                    <h1 class="landing-title">GameScore Pro</h1>
-                    <p class="landing-subtitle">Universal score tracking for any game</p>
-                    <div class="landing-buttons">
-                        <button class="btn btn-primary landing-btn" id="createNewSessionBtn">
-                            🎯 Create New Session
-                        </button>
-                        <button class="btn btn-secondary landing-btn" id="joinSessionBtn">
-                            👥 Join Session
-                        </button>
-                        <button class="btn btn-secondary landing-btn" id="spectatorBtn">
-                            👁️ Watch as Spectator
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Create Session Page -->
-            <div id="createSession" class="page">
-                <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title">Create New Session</h2>
-                        <p class="card-subtitle">Set up your game parameters</p>
-                    </div>
-                    
-                    <form id="createSessionForm">
-                        <div class="form-group">
-                            <label class="form-label" for="sessionName">Session Name</label>
-                            <input type="text" id="sessionName" class="form-input" placeholder="e.g., Friday Night Cards" required>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label">Number of Players</label>
-                            <div class="player-count-controls">
-                                <button type="button" class="count-btn" id="decreasePlayerCount">−</button>
-                                <span class="count-display" id="playerCountDisplay">2</span>
-                                <button type="button" class="count-btn" id="increasePlayerCount">+</button>
-                            </div>
-                            <input type="hidden" id="playerCount" value="2">
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label" for="startingScore">Starting Score</label>
-                            <input type="number" id="startingScore" class="form-input" value="0" step="0.1">
-                        </div>
-
-                        <div class="form-group">
-                            <div class="checkbox-group">
-                                <input type="checkbox" id="allowDecimals" class="checkbox">
-                                <label class="form-label" for="allowDecimals">Allow decimal scores (e.g., 1.5)</label>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label" for="targetScore">Target Score (Optional)</label>
-                            <input type="number" id="targetScore" class="form-input" placeholder="e.g., 500" step="0.1">
-                        </div>
-
-                        <div class="form-group">
-                            <div class="checkbox-group">
-                                <input type="checkbox" id="playAfterTarget" class="checkbox">
-                                <label class="form-label" for="playAfterTarget">Continue playing after target score is reached</label>
-                            </div>
-                        </div>
-
-                        <div class="btn-group">
-                            <button type="submit" class="btn btn-primary" id="createSessionButton">Create Session</button>
-                            <button type="button" class="btn btn-secondary" onclick="showPage('landing')">Back</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Join Session Page -->
-            <div id="joinSession" class="page">
-                <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title">Join Session</h2>
-                        <p class="card-subtitle">Enter the session code to join</p>
-                    </div>
-                    
-                    <form id="joinSessionForm">
-                        <div class="form-group">
-                            <label class="form-label" for="joinSessionCode">Session Code</label>
-                            <input type="text" id="joinSessionCode" class="form-input" placeholder="e.g., ABC123" required maxlength="6" style="text-transform: uppercase;">
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label" for="playerName">Your Name</label>
-                            <input type="text" id="playerName" class="form-input" placeholder="Enter your name" required>
-                        </div>
-
-                        <div class="btn-group">
-                            <button type="submit" class="btn btn-primary">Join Session</button>
-                            <button type="button" class="btn btn-secondary" onclick="showPage('landing')">Back</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Spectator Join Page -->
-            <div id="spectatorJoin" class="page">
-                <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title">Watch as Spectator</h2>
-                        <p class="card-subtitle">Enter the session code to watch</p>
-                    </div>
-                    
-                    <form id="spectatorJoinForm">
-                        <div class="form-group">
-                            <label class="form-label" for="spectatorSessionCode">Session Code</label>
-                            <input type="text" id="spectatorSessionCode" class="form-input" placeholder="e.g., ABC123" required maxlength="6" style="text-transform: uppercase;">
-                        </div>
-
-                        <div class="btn-group">
-                            <button type="submit" class="btn btn-primary">Start Watching</button>
-                            <button type="button" class="btn btn-secondary" onclick="showPage('landing')">Back</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Session Success Page -->
-            <div id="sessionSuccess" class="page">
-                <div class="session-success">
-                    <h2 class="card-title">Session Created!</h2>
-                    <h3 id="displaySessionName">Game Session</h3>
-                    <div class="session-code" id="displaySessionCode">------</div>
-                    <p class="session-info">Share this code with other players</p>
-                    
-                    <div class="btn-group">
-                        <button class="btn btn-secondary" id="copySessionCode">📋 Copy Code</button>
-                        <button class="btn btn-success" id="startScoringButton">🎯 Start Scoring</button>
-                        <button class="btn btn-warning" id="setupTeamsButton">👥 Setup Teams</button>
-                        <button class="btn btn-secondary" onclick="showPage('landing')">🏠 Home</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Scorekeeper Page -->
-            <div id="scorekeeper" class="page">
-                <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title">🎮 Scorekeeper Mode</h2>
-                        <p class="card-subtitle">
-                            Session: <span id="scorekeeperSessionCode">------</span> | <span id="scorekeeperSessionName">Game Session</span>
-                            <br>Target Score: <span id="scorekeeperTargetScore">500</span> | Managing <span id="scorekeeperPlayerCount">2</span> players
-                        </p>
-                    </div>
-                    
-                    <div class="players-grid" id="playersContainer">
-                        <!-- Players will be dynamically inserted here -->
-                    </div>
-                </div>
-            </div>
-
-            <!-- Player View Page -->
-            <div id="playerView" class="page">
-                <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title">👤 Player View</h2>
-                        <p class="card-subtitle">
-                            Session: <span id="playerViewSessionCode">------</span> | <span id="playerViewSessionName">Game Session</span>
-                            <br>Target Score: <span id="playerViewTargetScore">500</span> | Scores update automatically
-                        </p>
-                    </div>
-                    
-                    <div class="players-grid" id="playerViewContainer">
-                        <!-- Players will be dynamically inserted here -->
-                    </div>
-                </div>
-            </div>
-
-            <!-- Spectator View Page -->
-            <div id="spectatorView" class="page">
-                <div class="spectator-view">
-                    <div class="spectator-header">
-                        <h2 class="spectator-title">👁️ Spectator Mode</h2>
-                        <p class="spectator-info">
-                            Session: <span id="spectatorSessionCode">------</span> | <span id="spectatorSessionName">Game Session</span>
-                            <br>Target Score: <span id="spectatorTargetScore">500</span> | <span id="spectatorPlayerCount">2</span> players competing
-                        </p>
-                    </div>
-                    
-                    <div class="spectator-players" id="spectatorPlayersContainer">
-                        <!-- Spectator view will be dynamically inserted here -->
-                    </div>
-                </div>
-            </div>
-
-            <!-- Team Setup Page -->
-            <div id="teamSetup" class="page">
-                <div class="team-setup">
-                    <div class="card">
-                        <div class="card-header">
-                            <h2 class="card-title">👥 Team Setup</h2>
-                            <p class="card-subtitle">Drag players to create teams</p>
-                        </div>
-                        
-                        <div class="available-players">
-                            <h3 class="section-title">👤 Available Players</h3>
-                            <div class="player-cards" id="availablePlayersContainer">
-                                <!-- Available players will be inserted here -->
-                            </div>
-                        </div>
-
-                        <div class="teams-section">
-                            <h3 class="section-title">🏆 Teams</h3>
-                            <div id="teamsContainer">
-                                <!-- Teams will be inserted here -->
-                            </div>
-                            <div class="btn-group">
-                                <button class="btn btn-primary" onclick="createNewTeam()">Create New Team</button>
-                                <button class="btn btn-success" onclick="saveTeamConfiguration()">Save Team Configuration</button>
-                                <button class="btn btn-secondary" onclick="clearAllTeams()">Clear All Teams</button>
-                            </div>
-                        </div>
-
-                        <div class="btn-group">
-                            <button class="btn btn-secondary" onclick="showPage('sessionSuccess')">← Back to Session</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </main>
-
-        <!-- Footer -->
-        <footer class="footer">
-            <div class="footer-content">
-                <button class="btn btn-warning footer-btn" id="shareCodeBtn" style="display: none;">📊 Share Code</button>
-                <button class="btn btn-primary footer-btn" id="viewReportBtn" style="display: none;">📊 View Report</button>
-                <button class="btn btn-secondary footer-btn" id="resetScoresBtn" style="display: none;">🔄 Reset Scores</button>
-                <button class="btn btn-danger footer-btn" id="endSessionBtn" style="display: none;">🚪 End Session</button>
-            </div>
-        </footer>
-    </div>
-
+    
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     
-    <!-- App Scripts -->
+    <!-- Chart.js for game summary charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Landing Page -->
+        <div id="landing" class="page active">
+            <header>
+                <div class="header-content">
+                    <div class="header-left">
+                        <h1>GameScore Pro</h1>
+                        <p>Universal score tracking for any game</p>
+                    </div>
+                    <div class="header-right">
+                        <div class="connection-status">
+                            <div class="status-dot"></div>
+                            <span>Connecting...</span>
+                        </div>
+                        <button id="themeToggle" class="theme-toggle">
+                            <span class="theme-icon">🌙</span>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <main>
+                <div class="options-grid">
+                    <button id="createSessionBtn" class="option-tile">
+                        <div class="tile-icon">🎮</div>
+                        <h2>Create New Session</h2>
+                        <p>Start a new game and be the scorekeeper</p>
+                    </button>
+                    <button id="joinSessionBtn" class="option-tile">
+                        <div class="tile-icon">👥</div>
+                        <h2>Join Session</h2>
+                        <p>Enter a code to join an existing game</p>
+                    </button>
+                </div>
+            </main>
+        </div>
+
+        <!-- Create Session Page -->
+        <div id="createSession" class="page">
+            <header>
+                <div class="header-content">
+                    <div class="header-left">
+                        <button class="back-btn">← Back</button>
+                        <h1>Create New Session</h1>
+                    </div>
+                    <div class="header-right">
+                        <div class="connection-status">
+                            <div class="status-dot"></div>
+                            <span>Connecting...</span>
+                        </div>
+                        <button id="themeToggle" class="theme-toggle">
+                            <span class="theme-icon">🌙</span>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <main>
+                <form id="createSessionForm" class="session-form">
+                    <div class="form-group">
+                        <label for="playerCount">Number of Players</label>
+                        <div class="number-input">
+                            <button type="button" id="decreasePlayerCount" class="number-btn">−</button>
+                            <input type="number" id="playerCount" name="playerCount" value="2" min="1" max="12" readonly>
+                            <button type="button" id="increasePlayerCount" class="number-btn">+</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="sessionName">Session Name (Optional)</label>
+                        <input type="text" id="sessionName" name="sessionName" placeholder="e.g., Friday Night Cards">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="startingScore">Starting Score</label>
+                        <input type="number" id="startingScore" name="startingScore" value="0" step="1">
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="allowDecimals">
+                            Allow decimal scores (e.g., 1.5)
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="targetScore">Target Score (Optional)</label>
+                        <input type="number" id="targetScore" name="targetScore" placeholder="e.g., 100">
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="continueAfterTarget">
+                            Continue playing after target score is reached
+                        </label>
+                    </div>
+
+                    <button type="submit" class="primary-btn">Create Session</button>
+                </form>
+            </main>
+        </div>
+
+        <!-- Join Session Page -->
+        <div id="joinSession" class="page">
+            <header>
+                <div class="header-content">
+                    <div class="header-left">
+                        <button class="back-btn">← Back</button>
+                        <h1>Join Session</h1>
+                    </div>
+                    <div class="header-right">
+                        <div class="connection-status">
+                            <div class="status-dot"></div>
+                            <span>Connecting...</span>
+                        </div>
+                        <button id="themeToggle" class="theme-toggle">
+                            <span class="theme-icon">🌙</span>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <main>
+                <form id="joinSessionForm" class="session-form">
+                    <div class="form-group">
+                        <label for="sessionCode">Session Code</label>
+                        <input type="text" id="sessionCode" name="sessionCode" placeholder="Enter 6-character code" maxlength="6" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="playerName">Your Name</label>
+                        <input type="text" id="playerName" name="playerName" placeholder="Enter your name" required>
+                    </div>
+
+                    <button type="submit" class="primary-btn">Join Session</button>
+                </form>
+            </main>
+        </div>
+
+        <!-- Scorekeeper Page -->
+        <div id="scorekeeper" class="page">
+            <header>
+                <div class="header-content">
+                    <div class="header-left">
+                        <h1>Session: <span id="sessionCode">------</span></h1>
+                        <p>Scorekeeper Mode</p>
+                    </div>
+                    <div class="header-right">
+                        <div class="connection-status">
+                            <div class="status-dot"></div>
+                            <span>Connecting...</span>
+                        </div>
+                        <button id="exportBtn" class="export-btn">📊 Export</button>
+                        <button id="summaryBtn" class="summary-btn">📈 Summary</button>
+                        <button id="showQRBtn" class="secondary-btn">📱 QR Code</button>
+                        <button id="themeToggle" class="theme-toggle">
+                            <span class="theme-icon">🌙</span>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <main>
+                <div id="playersGrid" class="players-grid">
+                    <!-- Player tiles will be generated here -->
+                </div>
+
+                <div class="game-controls">
+                    <button id="resetScoresBtn" class="secondary-btn">🔄 Reset All Scores</button>
+                    <button id="newRoundBtn" class="secondary-btn">🎯 New Round</button>
+                    <button id="endSessionBtn" class="danger-btn">🛑 End Session</button>
+                </div>
+            </main>
+        </div>
+
+        <!-- Player View Page -->
+        <div id="playerView" class="page">
+            <header>
+                <div class="header-content">
+                    <div class="header-left">
+                        <h1>Session: <span id="playerViewSessionCode">------</span></h1>
+                        <p id="playerViewSessionName">Game Session</p>
+                    </div>
+                    <div class="header-right">
+                        <div class="connection-status">
+                            <div class="status-dot"></div>
+                            <span>Connecting...</span>
+                        </div>
+                        <button id="themeToggle" class="theme-toggle">
+                            <span class="theme-icon">🌙</span>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <main>
+                <div class="player-view-info">
+                    <div class="view-mode-indicator">
+                        <span class="indicator-icon">👁️</span>
+                        <span>Player View - Scores update automatically</span>
+                    </div>
+                </div>
+
+                <div id="playerViewGrid" class="players-grid">
+                    <!-- Player tiles will be generated here -->
+                </div>
+
+                <div class="last-updated">
+                    <small id="lastUpdated">Last updated: --:--:--</small>
+                </div>
+
+                <div class="player-actions">
+                    <button onclick="refreshScores()" class="secondary-btn">🔄 Refresh</button>
+                    <button onclick="exportGameData()" class="secondary-btn">📊 Export</button>
+                    <button onclick="showGameSummary()" class="secondary-btn">📈 Summary</button>
+                    <button onclick="leaveSession()" class="danger-btn">🚪 Leave Session</button>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Load Firebase configuration and main script -->
     <script src="firebase-config.js"></script>
     <script src="script.js"></script>
 </body>

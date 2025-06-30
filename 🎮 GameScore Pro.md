@@ -1,143 +1,282 @@
 # 🎮 GameScore Pro
 
-**Universal score tracking for any game** - A modern, real-time scoring application that brings players together across devices.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Firebase](https://img.shields.io/badge/Firebase-Realtime%20Database-orange.svg)](https://firebase.google.com/)
+[![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-yellow.svg)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-GameScore%20Pro-blue?style=for-the-badge)](https://kappter.github.io/kappscore/)
-[![Firebase](https://img.shields.io/badge/Firebase-Real--time-orange?style=for-the-badge)](https://firebase.google.com/)
-[![Responsive](https://img.shields.io/badge/Design-Mobile%20First-green?style=for-the-badge)](https://kappter.github.io/kappscore/)
+**Universal score tracking for any game** - A professional, real-time multiplayer scoring application perfect for card games, board games, golf, tournaments, and any competitive activity.
 
-## 🌟 What Makes GameScore Pro Special
+## ✨ Features
 
-GameScore Pro transforms any gathering into a seamless scoring experience. Whether you're playing cards with family, hosting a golf tournament, or running a board game night, GameScore Pro keeps everyone connected and engaged with real-time score tracking that works across all devices.
+### 🎯 Core Functionality
+- **Real-time Score Tracking** - Instant updates across all devices
+- **Session-based Gaming** - Create and join sessions with 6-character codes
+- **Multi-device Support** - Works seamlessly on phones, tablets, and computers
+- **Offline Capability** - Continue playing even without internet connection
+- **Host-controlled Sessions** - Scorekeeper has full control over the game
 
-## ✨ Key Features
+### 👥 Player Management
+- **1-12 Player Support** - Perfect for small groups or large tournaments
+- **Custom Player Names** - Personalize your gaming experience
+- **Player Color Customization** - Choose your own tile colors for easy identification
+- **Smart Player Assignment** - Automatic slot assignment for joiners
 
-### 🔥 Real-Time Multiplayer
-- **Instant Synchronization**: Score changes appear immediately on all connected devices
-- **Live Session Management**: Join games with simple 6-character codes
-- **Cross-Device Compatibility**: Works seamlessly on phones, tablets, and computers
-- **Automatic Reconnection**: Handles network interruptions gracefully
+### 🏆 Team Features
+- **Flexible Team Creation** - Any configuration (2v2, 3v1, 4v2v2, etc.)
+- **Custom Team Names & Colors** - Visual distinction with team badges
+- **Automatic Team Scoring** - Individual scores + team totals
+- **Dual Leaderboards** - Individual AND team rankings
+- **Mixed Competition** - Individuals can compete against teams
 
-### 🎯 Universal Game Support
-- **1-12 Players**: Perfect for intimate games or large tournaments
-- **Flexible Scoring**: Integer or decimal point support
-- **Custom Score Amounts**: Quick presets (+1, +5, +10) or custom values
-- **Target Score Goals**: Set winning conditions with optional overtime play
+### 👁️ Spectator Mode
+- **Remote Viewing** - Watch games without participating
+- **Real-time Updates** - See all score changes as they happen
+- **Ranking Display** - Players sorted by current score
+- **Spectator Count** - Track who's watching the game
 
-### 🎨 Beautiful User Experience
-- **Elegant Metallic UI**: Polished beveled buttons with sophisticated gradients
-- **Light & Dark Modes**: Automatic theme switching with high contrast accessibility
-- **Mobile-First Design**: Optimized for touch interactions and small screens
-- **Smart Grid Layout**: All players visible without scrolling, regardless of count
+### 📊 Advanced Features
+- **Target Score Detection** - Automatic winner announcements
+- **Score History Tracking** - Complete timeline of all changes
+- **Decimal Score Support** - Perfect for precise scoring systems
+- **Custom Score Increments** - Preset buttons plus custom amounts
+- **Game Reports** - Detailed statistics and export options
 
-### 📊 Professional Features
-- **Export Functionality**: Generate beautiful HTML reports with complete game history
-- **Score Analytics**: Player statistics, performance tracking, and winner identification
-- **Session Persistence**: Games survive page refreshes and device switches
-- **QR Code Sharing**: Easy session joining with scannable codes
+### 📱 User Experience
+- **Beautiful Interface** - Professional design with smooth animations
+- **Responsive Design** - Optimized for all screen sizes
+- **Touch-friendly Controls** - Perfect for mobile devices
+- **Dark/Light Themes** - Comfortable viewing in any environment
+- **Accessibility Features** - High contrast options and clear typography
 
-### 🛠️ Technical Excellence
-- **Firebase Integration**: Enterprise-grade real-time database
-- **Responsive Grid System**: Intelligent layout adaptation (2x2, 3x3, 4x3 grids)
-- **Offline Support**: Graceful degradation when network is unavailable
-- **Progressive Web App**: Install-ready for native app experience
+## 🚀 Perfect For
 
-## 🎲 Perfect For
+### 🃏 Card Games
+- **Bridge, Spades, Hearts** - Team-based card games
+- **Poker Tournaments** - Track chips and eliminations
+- **Rummy, Gin** - Running score games
+- **Any card game** - Flexible scoring system
 
-| Game Type | Examples | Players |
-|-----------|----------|---------|
-| **Card Games** | Poker, Rummy, Bridge, Hearts | 2-8 |
-| **Board Games** | Monopoly, Scrabble, Risk | 2-6 |
-| **Sports** | Golf, Bowling, Darts | 1-12 |
-| **Party Games** | Trivia, Charades, Pictionary | 4-12 |
-| **Tournaments** | Any competitive event | 1-12 |
+### 🎲 Board Games
+- **Monopoly, Scrabble** - Classic board games
+- **Settlers of Catan** - Resource management games
+- **Risk, Axis & Allies** - Strategy games
+- **Custom games** - Any scoring system
 
-## 🚀 Quick Start
+### ⛳ Sports & Activities
+- **Golf Scrambles** - Team competitions and individual play
+- **Bowling Leagues** - Track scores across multiple games
+- **Darts Tournaments** - Professional scoring
+- **Trivia Nights** - Team-based competitions
 
-1. **Visit**: [GameScore Pro](https://kappter.github.io/kappscore/)
-2. **Create Session**: Choose player count and game settings
-3. **Share Code**: Others join using the 6-character session code
-4. **Start Playing**: Real-time score tracking begins immediately
+### 🏢 Corporate Events
+- **Team Building** - Department vs department competitions
+- **Training Games** - Educational scoring systems
+- **Company Tournaments** - Multi-round competitions
+- **Sales Contests** - Performance tracking
 
-## 💡 How It Works
+## 🛠️ Quick Setup
 
-### For the Scorekeeper
-1. Create a new session with customized settings
-2. Share the session code or QR code with players
-3. Update scores using intuitive +/- controls
-4. Export detailed game reports when finished
+### 1. Firebase Configuration
+1. Create a new Firebase project at [Firebase Console](https://console.firebase.google.com/)
+2. Enable Realtime Database
+3. Copy your configuration values
+4. Update `firebase-config.js` with your project details:
 
-### For Players
-1. Join using the session code
-2. View live scores as they update
-3. Edit your own player name
-4. Watch the game unfold in real-time
+```javascript
+const firebaseConfig = {
+    apiKey: "your-api-key-here",
+    authDomain: "your-project-id.firebaseapp.com",
+    databaseURL: "https://your-project-id-default-rtdb.firebaseio.com/",
+    projectId: "your-project-id",
+    storageBucket: "your-project-id.appspot.com",
+    messagingSenderId: "123456789",
+    appId: "1:123456789:web:abcdef123456"
+};
+```
 
-## 🔧 Technical Stack
+### 2. Database Rules
+Set your Firebase Realtime Database rules for public access:
 
-- **Frontend**: Vanilla JavaScript, CSS3, HTML5
+```json
+{
+  "rules": {
+    ".read": true,
+    ".write": true
+  }
+}
+```
+
+### 3. Deployment Options
+
+#### GitHub Pages (Recommended)
+1. Fork or upload files to a GitHub repository
+2. Enable GitHub Pages in repository settings
+3. Your app will be live at `https://username.github.io/repository-name`
+
+#### Local Development
+1. Clone or download the project files
+2. Open `index.html` in a web browser
+3. Or use a local server: `python -m http.server 8000`
+
+#### Web Hosting
+Upload all files to any web hosting service that supports static websites.
+
+## 📖 How to Use
+
+### Creating a Session
+1. Click **"Create New Session"**
+2. Enter session name and configure settings:
+   - Number of players (1-12)
+   - Starting score
+   - Target score (optional)
+   - Allow decimal scores
+   - Continue after target reached
+3. Click **"Create Session"**
+4. Share the 6-character code with other players
+
+### Joining a Session
+1. Click **"Join Session"**
+2. Enter the session code and your name
+3. Choose **"Join as Player"** or **"Join as Spectator"**
+4. Start playing!
+
+### Team Setup (Optional)
+1. After creating a session, click **"Setup Teams"**
+2. Drag players into teams
+3. Customize team names and colors
+4. Save configuration
+
+### Scoring
+- **Scorekeeper**: Full control with +/- buttons and custom amounts
+- **Players**: View all scores in real-time with "You" identification
+- **Spectators**: Watch the game with ranking display
+
+### Reports & Export
+- Click **"Show Report"** for detailed game statistics
+- Export as JSON for data analysis
+- Export as HTML for sharing or printing
+- View score progression charts and timelines
+
+## 🎨 Customization
+
+### Player Colors
+- Each player can choose their own tile color
+- Host can modify any player's color
+- Color picker with preset palette
+- Real-time color updates across all devices
+
+### Team Configuration
+- Create unlimited teams with custom names
+- Assign team colors for visual distinction
+- Drag-and-drop player assignment
+- Automatic team score calculation
+
+### Scoring Options
+- Preset increment buttons (-10, -5, -1, +1, +5, +10)
+- Custom amount input with +/- controls
+- Decimal score support (optional)
+- Individual score reset functionality
+- Bulk score reset for new rounds
+
+## 🔧 Technical Details
+
+### Built With
+- **Frontend**: HTML5, CSS3, JavaScript (ES6+)
 - **Backend**: Firebase Realtime Database
-- **Hosting**: GitHub Pages
-- **Design**: Mobile-first responsive design
-- **Real-time**: WebSocket connections via Firebase
+- **Charts**: Chart.js for score progression graphs
+- **Responsive**: CSS Grid and Flexbox
+- **Icons**: Unicode emojis for universal compatibility
 
-## 🎨 Design Philosophy
+### Browser Support
+- **Chrome** 60+ ✅
+- **Firefox** 55+ ✅
+- **Safari** 12+ ✅
+- **Edge** 79+ ✅
+- **Mobile browsers** ✅
 
-GameScore Pro embraces a **mobile-first, touch-friendly** approach with:
-- Large, accessible buttons optimized for finger navigation
-- High contrast color schemes for excellent readability
-- Elegant metallic textures that feel premium and professional
-- Intelligent layouts that adapt to any screen size or player count
+### Performance
+- **Lightweight**: ~50KB total size
+- **Fast loading**: CDN-hosted dependencies
+- **Real-time**: Sub-second update propagation
+- **Offline capable**: Local storage fallback
 
-## 📱 Device Compatibility
+## 📱 Mobile Experience
 
-- **Mobile Phones**: iOS Safari, Android Chrome
-- **Tablets**: iPad, Android tablets
-- **Desktop**: Chrome, Firefox, Safari, Edge
-- **Progressive Web App**: Installable on all platforms
+### Touch Optimized
+- Large, finger-friendly buttons
+- Swipe gestures for navigation
+- Responsive grid layouts
+- Portrait and landscape support
 
-## 🔒 Privacy & Data
+### PWA Features
+- Add to home screen capability
+- Offline functionality
+- Fast loading with caching
+- Native app-like experience
 
-- **Your Data**: Stored securely in your own Firebase project
-- **No Tracking**: No analytics or user behavior monitoring
-- **Session Based**: Data automatically expires with game sessions
-- **Open Source**: Full transparency in code and functionality
+## 🔒 Privacy & Security
 
-## 🌍 Use Cases
+### Data Handling
+- **No personal data collection** - Only game scores and chosen names
+- **Temporary storage** - Sessions auto-expire after inactivity
+- **No tracking** - No analytics or user monitoring
+- **Local first** - Works offline with local storage
 
-### Family Game Night
-*"Finally, no more arguments about the score! Everyone can see the live updates on their phones."*
-
-### Golf Tournaments
-*"Perfect for tracking multiple foursomes across 18 holes with real-time leaderboards."*
-
-### Card Game Leagues
-*"The export feature creates professional tournament reports we can share with all participants."*
-
-### Board Game Cafes
-*"Customers love being able to track their games without paper scorecards."*
-
-## 🎯 Future Roadmap
-
-- [ ] Player avatars and profiles
-- [ ] Game templates for popular games
-- [ ] Tournament bracket management
-- [ ] Historical game statistics
-- [ ] Social sharing integration
-- [ ] Voice score input
-- [ ] Multi-language support
+### Firebase Security
+- Public read/write for game sessions only
+- No authentication required for ease of use
+- Data automatically cleaned up
+- No sensitive information stored
 
 ## 🤝 Contributing
 
-GameScore Pro is open source and welcomes contributions! Whether you're fixing bugs, adding features, or improving documentation, your help makes the app better for everyone.
+We welcome contributions! Here's how you can help:
+
+### Bug Reports
+- Use GitHub Issues to report bugs
+- Include browser version and steps to reproduce
+- Screenshots are helpful for UI issues
+
+### Feature Requests
+- Suggest new features via GitHub Issues
+- Explain the use case and expected behavior
+- Consider backward compatibility
+
+### Code Contributions
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
 
 ## 📄 License
 
-MIT License - Feel free to use, modify, and distribute as needed.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- **Firebase** for real-time database infrastructure
+- **Chart.js** for beautiful score progression charts
+- **The gaming community** for inspiration and feedback
+- **Open source contributors** who make projects like this possible
+
+## 📞 Support
+
+### Getting Help
+- **Documentation**: Check this README first
+- **Issues**: Use GitHub Issues for bug reports
+- **Discussions**: GitHub Discussions for questions
+- **Email**: Contact the maintainer for urgent issues
+
+### Common Issues
+- **Firebase not connecting**: Check your configuration in `firebase-config.js`
+- **Scores not syncing**: Verify internet connection and Firebase rules
+- **Mobile display issues**: Ensure viewport meta tag is present
+- **Session not found**: Double-check the 6-character code
 
 ---
 
-**Built with ❤️ for game lovers everywhere**
+**Made with ❤️ for the gaming community**
 
-*Transform your next game night with GameScore Pro - where every point counts and every player stays connected.*
+*GameScore Pro - Because every game deserves professional scoring*
 
