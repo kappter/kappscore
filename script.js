@@ -1,9 +1,4 @@
-// GameScore Pro - Enhanced with Team Management, Tile Colors, and Spectator Mode
-
-// Firebase Configuration (ensure firebase-config.js is loaded first)
-let db;
-let firebaseInitialized = false;
-let firebaseConnectionStatus = false; // true if online, false if offline
+// GameScore Pro - Enhanced with Teams, Colors, Spectator Mode, and Dark Mode
 
 // Current session data
 let currentSession = null;
@@ -34,19 +29,21 @@ console.log('GameScore Pro starting...');
 
 // Utility functions
 function showPage(pageId) {
-    Object.values(PAGE_IDS).forEach(id => {
-        const page = document.getElementById(id);
-        if (page) {
-            page.style.display = 'none';
-        }
+    // Hide all pages first
+    document.querySelectorAll('.page').forEach(page => {
+        page.style.display = 'none';
+        page.classList.remove('active');
     });
+    
+    // Show the requested page
     const activePage = document.getElementById(pageId);
     if (activePage) {
         activePage.style.display = 'block';
+        activePage.classList.add('active');
         console.log(`Page shown successfully: ${pageId}`);
     } else {
         console.error(`Page not found: ${pageId}`);
-        console.log('Available pages:', Object.values(PAGE_IDS).filter(id => document.getElementById(id)));
+        console.log('Available pages:', Array.from(document.querySelectorAll('.page')).map(p => p.id));
     }
 }
 
@@ -76,50 +73,198 @@ function getRandomColor() {
 }
 
 function updateConnectionStatus(isConnected) {
-    firebaseConnectionStatus = isConnected;
+    window.firebaseConnectionStatus = isConnected;
     const statusElement = document.getElementById('connectionStatus');
     if (statusElement) {
-        statusElement.textContent = isConnected ? 'Online' : 'Offline';
-        statusElement.className = isConnected ? 'status-online' : 'status-offline';
+        if (window.firebaseInitialized) {
+            statusElement.textContent = isConnected ? 'Online' : 'Offline';
+            statusElement.className = isConnected ? 'connection-status status-online' : 'connection-status status-offline';
+        } else {
+            statusElement.textContent = 'Local Mode';
+            statusElement.className = 'connection-status status-local';
+        }
     }
-    console.log(`Updating connection status: ${isConnected}`);
+    console.log(`Connection status updated: ${window.firebaseInitialized ? (isConnected ? 'Online' : 'Offline') : 'Local Mode'}`);
 }
 
 // Firebase Initialization and Connection Monitoring
-async function initializeFirebaseWithRetry(retries = 10, delay = 1000) {
-    console.log('Waiting for Firebase with retry logic...');
+async function initializeFirebaseWithRetry(retries = 3, delay = 1000) {
+    console.log('Checking Firebase availability...');
+    
+    // Check if Firebase is loaded and configured
+    if (typeof firebase === 'undefined') {
+        console.log('Firebase SDK not available, running in local mode');
+        window.firebaseInitialized = false;
+        updateConnectionStatus(false);
+        return;
+    }
+
+    // Check if firebase-config.js has been loaded and configured
+    if (typeof firebaseConfig === 'undefined' || 
+        firebaseConfig.apiKey === "your-api-key-here" || 
+        firebaseConfig.databaseURL.includes("your-project-id")) {
+        console.log('Firebase not configured with real credentials, running in local mode');
+        window.firebaseInitialized = false;
+        updateConnectionStatus(false);
+        return;
+    }
+
+    // Try to initialize Firebase
     for (let i = 1; i <= retries; i++) {
-        console.log(`Firebase check attempt ${i}/${retries}`);
-        if (typeof firebase !== 'undefined' && firebase.app && firebase.database) {
-            console.log('Firebase found! Setting up connection monitoring...');
-            try {
-                db = firebase.database();
-                firebaseInitialized = true;
+        console.log(`Firebase initialization attempt ${i}/${retries}`);
+        try {
+            if (!window.firebaseInitialized) {
+                firebase.initializeApp(firebaseConfig);
+                window.db = firebase.database();
+                window.firebaseInitialized = true;
                 setupFirebaseConnectionMonitoring();
-                console.log('Firebase is ready for operations!');
+                console.log('Firebase initialized successfully!');
                 return;
-            } catch (error) {
-                console.error('Error initializing Firebase:', error);
-                firebaseInitialized = false;
+            }
+        } catch (error) {
+            console.log(`Firebase initialization attempt ${i} failed:`, error.message);
+            if (i === retries) {
+                console.log('All Firebase initialization attempts failed, running in local mode');
+                window.firebaseInitialized = false;
+                updateConnectionStatus(false);
+            } else {
+                await new Promise(resolve => setTimeout(resolve, delay));
             }
         }
-        await new Promise(resolve => setTimeout(resolve, delay));
     }
-    console.error('Firebase not available after multiple retries. Running in offline mode.');
-    firebaseInitialized = false;
 }
 
 function setupFirebaseConnectionMonitoring() {
+    if (!window.firebaseInitialized || !window.db) return;
+    
     console.log('Setting up Firebase connection monitoring...');
-    const connectedRef = db.ref('.info/connected');
-    connectedRef.on('value', snap => {
-        const isConnected = snap.val();
-        console.log('Firebase connection status changed:', isConnected);
-        updateConnectionStatus(isConnected);
+    try {
+        const connectedRef = window.db.ref('.info/connected');
+        connectedRef.on('value', snap => {
+            const isConnected = snap.val();
+            console.log('Firebase connection status changed:', isConnected);
+            updateConnectionStatus(isConnected);
+        });
+    } catch (error) {
+        console.log('Connection monitoring setup failed:', error.message);
+        updateConnectionStatus(false);
+    }
+}
+
+// UI Update Functions
+function updateScorekeeperInterface() {
+    if (!currentSession) return;
+
+    // Update session info in header
+    const sessionNameElement = document.getElementById('scorekeeperSessionName');
+    const sessionCodeElement = document.getElementById('scorekeeperSessionCode');
+    
+    if (sessionNameElement) {
+        sessionNameElement.textContent = currentSession.name || 'Game Session';
+    }
+    if (sessionCodeElement) {
+        sessionCodeElement.textContent = currentSession.code || '------';
+    }
+
+    // Update players grid
+    const playersContainer = document.getElementById('playersContainer');
+    if (!playersContainer) return;
+
+    playersContainer.innerHTML = '';
+
+    currentSession.players.forEach(player => {
+        const playerTile = document.createElement('div');
+        playerTile.className = 'player-tile';
+        playerTile.id = `player-${player.id}`;
+        
+        if (player.id === currentPlayerId) {
+            playerTile.classList.add('current-player');
+        }
+
+        playerTile.innerHTML = `
+            <div class="player-name">
+                ${player.name}
+                ${player.id === currentPlayerId ? '<span class="player-badge">You</span>' : ''}
+            </div>
+            <div class="player-score" style="color: ${player.color}">${player.score}</div>
+            ${currentSession.isHost ? `
+                <div class="score-controls">
+                    <button class="score-btn negative" onclick="updateScore('${player.id}', -10)">-10</button>
+                    <button class="score-btn negative" onclick="updateScore('${player.id}', -5)">-5</button>
+                    <button class="score-btn negative" onclick="updateScore('${player.id}', -1)">-1</button>
+                    <button class="score-btn" onclick="showCustomScoreInput('${player.id}')">1</button>
+                    <button class="score-btn positive" onclick="updateScore('${player.id}', 1)">+</button>
+                    <button class="score-btn positive" onclick="updateScore('${player.id}', 5)">+5</button>
+                    <button class="score-btn positive" onclick="updateScore('${player.id}', 10)">+10</button>
+                </div>
+                <div class="color-picker">
+                    ${COLOR_PALETTE.map(color => `
+                        <div class="color-option ${player.color === color ? 'selected' : ''}" 
+                             style="background-color: ${color}"
+                             onclick="updatePlayerColor('${player.id}', '${color}')"></div>
+                    `).join('')}
+                </div>
+            ` : ''}
+        `;
+
+        playersContainer.appendChild(playerTile);
     });
 }
 
 // Session Management
+function showSessionSuccessScreen(sessionCode, sessionName) {
+    const sessionCodeDisplay = document.getElementById('displaySessionCode');
+    const sessionNameDisplay = document.getElementById('displaySessionName');
+    const copyCodeButton = document.getElementById('copySessionCode');
+    const startScoringButton = document.getElementById('startScoringButton');
+    const setupTeamsButton = document.getElementById('setupTeamsButton');
+
+    if (sessionCodeDisplay) sessionCodeDisplay.textContent = sessionCode;
+    if (sessionNameDisplay) sessionNameDisplay.textContent = sessionName;
+
+    if (copyCodeButton) {
+        copyCodeButton.onclick = () => {
+            navigator.clipboard.writeText(sessionCode).then(() => {
+                showMessage('Session code copied!', 'success');
+            }).catch(err => {
+                console.error('Could not copy text: ', err);
+                showMessage('Failed to copy code.', 'error');
+            });
+        };
+    }
+
+    if (startScoringButton) {
+        startScoringButton.onclick = () => {
+            console.log('Start scoring button clicked');
+            console.log('Current session:', currentSession);
+            console.log('updateScorekeeperInterface function:', typeof updateScorekeeperInterface);
+            if (currentSession.isHost) {
+                showPage('scorekeeper');
+                if (typeof updateScorekeeperInterface === 'function') {
+                    updateScorekeeperInterface();
+                } else {
+                    console.error('updateScorekeeperInterface is not a function');
+                }
+            } else {
+                showMessage('Only the host can start scoring.', 'error');
+            }
+        };
+    }
+
+    if (setupTeamsButton) {
+        setupTeamsButton.onclick = () => {
+            if (currentSession.isHost) {
+                showPage(PAGE_IDS.TEAM_SETUP);
+                renderTeamSetup();
+            } else {
+                showMessage('Only the host can set up teams.', 'error');
+            }
+        };
+    }
+
+    showPage(PAGE_IDS.SESSION_SUCCESS);
+}
+
 async function handleCreateSession(event) {
     event.preventDefault();
     const createButton = document.getElementById('createSessionButton');
@@ -181,10 +326,13 @@ async function handleCreateSession(event) {
     console.log('Creating session...');
     console.log('Generated session code:', sessionCode);
 
-    if (firebaseInitialized && firebaseConnectionStatus) {
+    if (window.firebaseInitialized && window.firebaseConnectionStatus) {
         await saveSessionToFirebase(sessionCode, currentSession);
         showMessage('Session created and saved online!', 'success');
     } else {
+        // Save to localStorage for local mode
+        const localSessionKey = `gameScore_session_${sessionCode}`;
+        localStorage.setItem(localSessionKey, JSON.stringify(currentSession));
         showMessage('Session created locally (offline mode)', 'warning');
     }
 
@@ -201,17 +349,18 @@ async function handleCreateSession(event) {
     }
 }
 
-async function saveSessionToFirebase(code, sessionData) {
-    if (!firebaseInitialized || !firebaseConnectionStatus) {
-        console.warn('Firebase not available, cannot save session.');
+async function saveSessionToFirebase(sessionCode, sessionData) {
+    if (!window.firebaseInitialized || !window.db) {
+        console.log('Firebase not available, skipping save');
         return;
     }
+    
     try {
-        await db.ref(`sessions/${code}`).set(sessionData);
+        await window.db.ref(`sessions/${sessionCode}`).set(sessionData);
         console.log('Session saved to Firebase successfully');
     } catch (error) {
         console.error('Error saving session to Firebase:', error);
-        showMessage('Error saving session to Firebase. Please try again.', 'error');
+        showMessage('Failed to save session online, but local session is ready', 'warning');
     }
 }
 
@@ -223,13 +372,72 @@ async function joinSession(sessionCode, playerName, playerColor, asSpectator = f
 
     sessionCode = sessionCode.toUpperCase();
 
-    if (!firebaseInitialized || !firebaseConnectionStatus) {
-        showMessage('Cannot join session - Firebase not connected. Please wait and try again.', 'error');
+    if (!window.firebaseInitialized || !window.firebaseConnectionStatus) {
+        showMessage('⚠️ Local Mode Limitation: You can only join sessions created on this same device. For multi-device sessions, Firebase configuration is required.', 'warning');
+        
+        // Check if there's a local session with this code
+        const localSessionKey = `gameScore_session_${sessionCode}`;
+        const localSession = localStorage.getItem(localSessionKey);
+        
+        if (localSession) {
+            try {
+                currentSession = JSON.parse(localSession);
+                currentSession.isHost = false;
+                
+                if (asSpectator) {
+                    // Join as spectator
+                    isSpectator = true;
+                    currentPlayerId = null;
+                    currentPlayerName = playerName || 'Spectator';
+                    
+                    // Add to spectators list
+                    if (!currentSession.spectators) currentSession.spectators = [];
+                    const spectatorId = 'spectator-' + Date.now();
+                    currentSession.spectators.push({
+                        id: spectatorId,
+                        name: currentPlayerName,
+                        joinedAt: Date.now()
+                    });
+                    
+                    // Save updated session
+                    localStorage.setItem(localSessionKey, JSON.stringify(currentSession));
+                    
+                    showMessage(`Joined as spectator: ${currentPlayerName}`, 'success');
+                    showPage('spectatorView');
+                    updateSpectatorView();
+                } else {
+                    // Join as player - find empty slot
+                    const emptyPlayerIndex = currentSession.players.findIndex(p => !p.name || p.name.startsWith('Player '));
+                    
+                    if (emptyPlayerIndex !== -1) {
+                        currentSession.players[emptyPlayerIndex].name = playerName;
+                        currentSession.players[emptyPlayerIndex].color = playerColor;
+                        currentPlayerId = currentSession.players[emptyPlayerIndex].id;
+                        currentPlayerName = playerName;
+                        currentPlayerTileColor = playerColor;
+                        
+                        // Save updated session
+                        localStorage.setItem(localSessionKey, JSON.stringify(currentSession));
+                        
+                        showMessage(`Joined as player: ${playerName}`, 'success');
+                        showPage('playerView');
+                        updatePlayerView();
+                    } else {
+                        showMessage('Session is full. All player slots are taken.', 'error');
+                    }
+                }
+            } catch (error) {
+                console.error('Error parsing local session:', error);
+                showMessage('Invalid session data found locally.', 'error');
+            }
+        } else {
+            showMessage('Session not found on this device. In Local Mode, you can only join sessions created on the same device.', 'error');
+        }
         return;
     }
 
     try {
-        const snapshot = await db.ref(`sessions/${sessionCode}`).once('value');
+        const snapshot = await window.db.ref(`sessions/${sessionCode}`).once('value');
         if (snapshot.exists()) {
             const sessionData = snapshot.val();
             currentSession = {...sessionData, isHost: false};
@@ -295,8 +503,8 @@ async function joinSession(sessionCode, playerName, playerColor, asSpectator = f
 function leaveSession() {
     if (currentSession && currentSession.code) {
         if (currentSession.isHost) {
-            if (firebaseInitialized && firebaseConnectionStatus) {
-                db.ref(`sessions/${currentSession.code}`).remove()
+            if (window.firebaseInitialized && window.firebaseConnectionStatus) {
+                window.db.ref(`sessions/${currentSession.code}`).remove()
                     .then(() => {
                         console.log('Session deleted from Firebase.');
                         showMessage('Session ended and deleted.', 'info');
@@ -305,18 +513,30 @@ function leaveSession() {
                         console.error('Error deleting session:', error);
                         showMessage('Error deleting session.', 'error');
                     });
+            } else {
+                // Local mode - remove from localStorage
+                const localSessionKey = `gameScore_session_${currentSession.code}`;
+                localStorage.removeItem(localSessionKey);
+                showMessage('Session ended (local mode).', 'info');
             }
         } else if (isSpectator) {
             // Remove from spectators list
-            if (firebaseInitialized && firebaseConnectionStatus && currentSession.spectators) {
+            if (window.firebaseInitialized && window.firebaseConnectionStatus && currentSession.spectators) {
                 const updatedSpectators = currentSession.spectators.filter(s => s.name !== currentPlayerName);
-                db.ref(`sessions/${currentSession.code}/spectators`).set(updatedSpectators);
+                window.db.ref(`sessions/${currentSession.code}/spectators`).set(updatedSpectators);
+            } else {
+                // Local mode - update localStorage
+                if (currentSession.spectators) {
+                    currentSession.spectators = currentSession.spectators.filter(s => s.name !== currentPlayerName);
+                    const localSessionKey = `gameScore_session_${currentSession.code}`;
+                    localStorage.setItem(localSessionKey, JSON.stringify(currentSession));
+                }
             }
             showMessage('You have left the session.', 'info');
         } else {
             // Player leaves
-            if (firebaseInitialized && firebaseConnectionStatus && currentPlayerId) {
-                const playerRef = db.ref(`sessions/${currentSession.code}/players`);
+            if (window.firebaseInitialized && window.firebaseConnectionStatus && currentPlayerId) {
+                const playerRef = window.db.ref(`sessions/${currentSession.code}/players`);
                 playerRef.once('value', snapshot => {
                     const players = snapshot.val();
                     const playerIndex = players.findIndex(p => p.id === currentPlayerId);
@@ -325,20 +545,32 @@ function leaveSession() {
                         playerRef.set(players);
                     }
                 });
+            } else {
+                // Local mode - update localStorage
+                if (currentPlayerId) {
+                    const playerIndex = currentSession.players.findIndex(p => p.id === currentPlayerId);
+                    if (playerIndex !== -1) {
+                        currentSession.players[playerIndex].status = 'left';
+                        const localSessionKey = `gameScore_session_${currentSession.code}`;
+                        localStorage.setItem(localSessionKey, JSON.stringify(currentSession));
+                    }
+                }
             }
-            showMessage('You have left the session.', 'info');
-        }
     }
     
+    // Reset session variables
+    const sessionCode = currentSession?.code;
     currentSession = null;
     currentPlayerId = null;
     currentPlayerName = "Guest";
     currentPlayerTileColor = '#007bff';
     isSpectator = false;
     
-    if (db && currentSession?.code) {
-        db.ref(`sessions/${currentSession.code}`).off();
+    // Clean up Firebase listeners if they exist
+    if (window.db && sessionCode) {
+        window.db.ref(`sessions/${sessionCode}`).off();
     }
+    
     showPage(PAGE_IDS.LANDING);
 }
 
@@ -372,56 +604,8 @@ function setupRealtimeListeners(sessionCode) {
     });
 }
 
-// UI Updates
-function showSessionSuccessScreen(sessionCode, sessionName) {
-    const sessionCodeDisplay = document.getElementById('displaySessionCode');
-    const sessionNameDisplay = document.getElementById('displaySessionName');
-    const copyCodeButton = document.getElementById('copySessionCode');
-    const startScoringButton = document.getElementById('startScoringButton');
-    const setupTeamsButton = document.getElementById('setupTeamsButton');
-
-    if (sessionCodeDisplay) sessionCodeDisplay.textContent = sessionCode;
-    if (sessionNameDisplay) sessionNameDisplay.textContent = sessionName;
-
-    if (copyCodeButton) {
-        copyCodeButton.onclick = () => {
-            navigator.clipboard.writeText(sessionCode).then(() => {
-                showMessage('Session code copied!', 'success');
-            }).catch(err => {
-                console.error('Could not copy text: ', err);
-                showMessage('Failed to copy code.', 'error');
-            });
-        };
-    }
-
-    if (startScoringButton) {
-        startScoringButton.onclick = () => {
-            if (currentSession.isHost) {
-                showPage(PAGE_IDS.SCOREKEEPER);
-                updateScorekeeperInterface();
-            } else {
-                showMessage('Only the host can start scoring.', 'error');
-            }
-        };
-    }
-
-    if (setupTeamsButton) {
-        setupTeamsButton.onclick = () => {
-            if (currentSession.isHost) {
-                showPage(PAGE_IDS.TEAM_SETUP);
-                renderTeamSetup();
-            } else {
-                showMessage('Only the host can set up teams.', 'error');
-            }
-        };
-    }
-
-    showPage(PAGE_IDS.SESSION_SUCCESS);
-}
-
-function updateScorekeeperInterface() {
-    if (!currentSession || !currentSession.isHost) return;
-
+// Score Management Functions - Interface Updates
+function updateScorekeeperInterfacePlayers() {
     const scorekeeperPlayersContainer = document.getElementById('scorekeeperPlayers');
     if (!scorekeeperPlayersContainer) return;
 
@@ -430,26 +614,16 @@ function updateScorekeeperInterface() {
     currentSession.players.forEach(player => {
         const playerTile = document.createElement('div');
         playerTile.className = 'player-tile';
-        playerTile.style.backgroundColor = player.color;
+        playerTile.style.borderLeft = `4px solid ${player.color}`;
 
-        // Player Name with color picker
-        const playerHeader = document.createElement('div');
-        playerHeader.className = 'player-header';
-        
-        const playerNameElement = document.createElement('h3');
+        // Player Name
+        const playerNameElement = document.createElement('div');
         playerNameElement.className = 'player-name';
         playerNameElement.textContent = player.name;
-        playerNameElement.onclick = () => editPlayerName(player.id, player.name);
-        
-        const colorPicker = document.createElement('input');
-        colorPicker.type = 'color';
-        colorPicker.value = player.color;
-        colorPicker.className = 'color-picker';
-        colorPicker.onchange = (e) => updatePlayerColor(player.id, e.target.value);
-        
-        playerHeader.appendChild(playerNameElement);
-        playerHeader.appendChild(colorPicker);
-        playerTile.appendChild(playerHeader);
+        if (player.id === currentPlayerId) {
+            playerNameElement.textContent += ' (You)';
+        }
+        playerTile.appendChild(playerNameElement);
 
         // Player Score
         const playerScoreElement = document.createElement('div');
@@ -463,6 +637,7 @@ function updateScorekeeperInterface() {
 
         const createButton = (text, amount) => {
             const button = document.createElement('button');
+            button.className = 'score-btn';
             button.textContent = text;
             button.onclick = () => updateScore(player.id, amount);
             return button;
@@ -711,7 +886,7 @@ function displaySpectatorInfo(containerId) {
     }
 }
 
-// Score Logic
+// Score Logic - Make globally accessible
 async function updateScore(playerId, amount) {
     if (!currentSession || !currentSession.isHost) return;
 
@@ -733,9 +908,15 @@ async function updateScore(playerId, amount) {
 
     console.log(`Player ${playerId} score changed by ${amount} to ${newScore}`);
 
-    if (firebaseInitialized && firebaseConnectionStatus) {
+    // Save to localStorage for local mode
+    if (currentSession.code) {
+        const localSessionKey = `gameScore_session_${currentSession.code}`;
+        localStorage.setItem(localSessionKey, JSON.stringify(currentSession));
+    }
+
+    if (window.firebaseInitialized && window.firebaseConnectionStatus) {
         try {
-            await db.ref(`sessions/${currentSession.code}`).update({
+            await window.db.ref(`sessions/${currentSession.code}`).update({
                 players: currentSession.players,
                 lastUpdated: currentSession.lastUpdated
             });
@@ -747,6 +928,9 @@ async function updateScore(playerId, amount) {
         updateScorekeeperInterface();
     }
 }
+
+// Make updateScore globally accessible
+window.updateScore = updateScore;
 
 async function updatePlayerColor(playerId, newColor) {
     if (!currentSession) return;
@@ -767,9 +951,15 @@ async function updatePlayerColor(playerId, newColor) {
         currentPlayerTileColor = newColor;
     }
 
-    if (firebaseInitialized && firebaseConnectionStatus) {
+    // Save to localStorage for local mode
+    if (currentSession.code) {
+        const localSessionKey = `gameScore_session_${currentSession.code}`;
+        localStorage.setItem(localSessionKey, JSON.stringify(currentSession));
+    }
+
+    if (window.firebaseInitialized && window.firebaseConnectionStatus) {
         try {
-            await db.ref(`sessions/${currentSession.code}`).update({
+            await window.db.ref(`sessions/${currentSession.code}`).update({
                 players: currentSession.players,
                 lastUpdated: currentSession.lastUpdated
             });
@@ -785,6 +975,9 @@ async function updatePlayerColor(playerId, newColor) {
         }
     }
 }
+
+// Make updatePlayerColor globally accessible
+window.updatePlayerColor = updatePlayerColor;
 
 async function resetPlayerScore(playerId) {
     if (!currentSession || !currentSession.isHost) return;
@@ -818,6 +1011,21 @@ async function resetPlayerScore(playerId) {
         updateScorekeeperInterface();
     }
 }
+
+function showCustomScoreInput(playerId) {
+    const customAmount = prompt('Enter custom score amount (positive or negative):');
+    if (customAmount !== null && customAmount.trim() !== '') {
+        const amount = parseFloat(customAmount);
+        if (!isNaN(amount)) {
+            updateScore(playerId, amount);
+        } else {
+            showMessage('Please enter a valid number.', 'error');
+        }
+    }
+}
+
+// Make showCustomScoreInput globally accessible
+window.showCustomScoreInput = showCustomScoreInput;
 
 async function editPlayerName(playerId, currentName) {
     if (!currentSession) return;
@@ -870,35 +1078,56 @@ function calculateTeamScore(playerIds) {
 }
 
 function renderTeamSetup() {
-    const teamSetupContainer = document.getElementById('teamSetupContainer');
-    if (!teamSetupContainer) return;
-
-    teamSetupContainer.innerHTML = `
-        <h2>Team Setup</h2>
-        <div id="availablePlayers" class="player-pool">
-            <h3>Available Players</h3>
-            <div id="playerPool"></div>
-        </div>
-        <div id="teamsContainer">
-            <h3>Teams</h3>
-            <button id="createTeamButton" class="create-team-btn">Create New Team</button>
-            <div id="teamsList"></div>
-        </div>
-        <div class="team-actions">
-            <button onclick="saveTeamConfiguration()" class="save-teams-btn">Save Team Configuration</button>
-            <button onclick="clearAllTeams()" class="clear-teams-btn">Clear All Teams</button>
-        </div>
-    `;
-
-    renderPlayerPool();
+    renderAvailablePlayers();
     renderTeamsList();
     
-    document.getElementById('createTeamButton').onclick = createNewTeam;
+    const createTeamBtn = document.getElementById('createTeamBtn');
+    if (createTeamBtn) {
+        createTeamBtn.onclick = createNewTeam;
+    }
 }
 
-function renderPlayerPool() {
-    const playerPool = document.getElementById('playerPool');
-    if (!playerPool) return;
+function renderAvailablePlayers() {
+    const availablePlayersContainer = document.getElementById('availablePlayers');
+    if (!availablePlayersContainer) return;
+
+    availablePlayersContainer.innerHTML = '';
+    
+    currentSession.players.forEach(player => {
+        const isInTeam = Object.values(currentSession.teams || {}).some(team => 
+            team.players.includes(player.id)
+        );
+        
+        if (!isInTeam) {
+            const playerCard = document.createElement('div');
+            playerCard.className = 'player-card';
+            playerCard.draggable = true;
+            playerCard.dataset.playerId = player.id;
+            
+            playerCard.innerHTML = `
+                <div class="player-avatar" style="background-color: ${player.color}">
+                    ${player.name.charAt(0).toUpperCase()}
+                </div>
+                <div class="player-name">${player.name}</div>
+            `;
+            
+            // Add drag event listeners
+            playerCard.addEventListener('dragstart', handleDragStart);
+            playerCard.addEventListener('dragend', handleDragEnd);
+            
+            availablePlayersContainer.appendChild(playerCard);
+        }
+    });
+    
+    if (availablePlayersContainer.children.length === 0) {
+        availablePlayersContainer.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">👥</div>
+                <p>All players are assigned to teams</p>
+            </div>
+        `;
+    }
+}
 
     playerPool.innerHTML = '';
     
@@ -925,36 +1154,64 @@ function renderPlayerPool() {
 }
 
 function renderTeamsList() {
-    const teamsList = document.getElementById('teamsList');
-    if (!teamsList) return;
+    const teamsContainer = document.getElementById('teamsContainer');
+    if (!teamsContainer) return;
 
-    teamsList.innerHTML = '';
+    teamsContainer.innerHTML = '';
     
-    Object.entries(currentSession.teams || {}).forEach(([teamId, team]) => {
-        const teamElement = document.createElement('div');
-        teamElement.className = 'team-container';
-        teamElement.style.borderColor = team.color;
+    const teams = currentSession.teams || {};
+    
+    if (Object.keys(teams).length === 0) {
+        teamsContainer.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">🏆</div>
+                <p>No teams created yet</p>
+                <p style="font-size: 0.875rem; opacity: 0.7;">Click "Create New Team" to get started</p>
+            </div>
+        `;
+        return;
+    }
+    
+    Object.entries(teams).forEach(([teamId, team]) => {
+        const teamCard = document.createElement('div');
+        teamCard.className = 'team-card';
         
-        teamElement.innerHTML = `
+        teamCard.innerHTML = `
             <div class="team-header">
-                <input type="text" value="${team.name}" onchange="updateTeamName('${teamId}', this.value)" class="team-name-input">
-                <input type="color" value="${team.color}" onchange="updateTeamColor('${teamId}', this.value)" class="team-color-picker">
-                <button onclick="deleteTeam('${teamId}')" class="delete-team-btn">×</button>
+                <input type="text" value="${team.name}" onchange="updateTeamName('${teamId}', this.value)" 
+                       class="team-name" style="background: transparent; border: none; font-size: 1.125rem; font-weight: 600; color: var(--text-primary); width: 100%;">
+                <div class="team-badge">${team.players.length} players</div>
             </div>
-            <div class="team-players" ondrop="dropPlayer(event, '${teamId}')" ondragover="allowDrop(event)">
-                ${team.players.map(playerId => {
-                    const player = currentSession.players.find(p => p.id === playerId);
-                    return player ? `
-                        <div class="team-player" draggable="true" ondragstart="dragTeamPlayer(event, '${playerId}')" style="background-color: ${player.color}">
-                            ${player.name}
-                        </div>
-                    ` : '';
-                }).join('')}
+            <div class="team-players" 
+                 ondrop="dropPlayer(event, '${teamId}')" 
+                 ondragover="allowDrop(event)"
+                 data-team-id="${teamId}">
+                ${team.players.length === 0 ? 
+                    '<div style="text-align: center; color: var(--text-muted); padding: 2rem;">Drop players here</div>' :
+                    team.players.map(playerId => {
+                        const player = currentSession.players.find(p => p.id === playerId);
+                        return player ? `
+                            <div class="team-player" draggable="true" ondragstart="dragTeamPlayer(event, '${playerId}')">
+                                <div class="player-avatar" style="background-color: ${player.color}; width: 2rem; height: 2rem; font-size: 0.875rem;">
+                                    ${player.name.charAt(0).toUpperCase()}
+                                </div>
+                                <span>${player.name}</span>
+                            </div>
+                        ` : '';
+                    }).join('')
+                }
             </div>
-            <div class="team-score">Team Score: ${calculateTeamScore(team.players).toFixed(currentSession.allowDecimals ? 1 : 0)}</div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                <div style="font-weight: 500; color: var(--text-secondary);">
+                    Team Score: ${calculateTeamScore(team.players).toFixed(currentSession.allowDecimals ? 1 : 0)}
+                </div>
+                <button onclick="deleteTeam('${teamId}')" class="btn btn-danger" style="padding: 0.5rem; font-size: 0.875rem;">
+                    🗑️ Delete
+                </button>
+            </div>
         `;
         
-        teamsList.appendChild(teamElement);
+        teamsContainer.appendChild(teamCard);
     });
 }
 
@@ -1014,6 +1271,9 @@ function deleteTeam(teamId) {
         renderTeamsList();
     }
 }
+
+// Make deleteTeam globally accessible
+window.deleteTeam = deleteTeam;
 
 function clearAllTeams() {
     if (confirm('Are you sure you want to clear all teams?')) {
@@ -1081,22 +1341,35 @@ function checkWinCondition() {
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('Page loaded, initializing...');
     
+    // Initialize theme
+    initializeTheme();
+    
     await initializeFirebaseWithRetry();
     
     // Bind event listeners
-    const createButton = document.getElementById('createSessionBtn');
+    console.log('Starting button binding...');
+    const createButton = document.getElementById('createNewSessionBtn');
+    console.log('Create button element:', createButton);
     if (createButton) {
-        createButton.onclick = () => showPage(PAGE_IDS.CREATE_SESSION);
+        createButton.onclick = () => {
+            console.log('Create button clicked, navigating to createSession');
+            showPage('createSession');
+        };
+        console.log('Create button bound');
+    } else {
+        console.log('Create button not found');
     }
 
     const joinButton = document.getElementById('joinSessionBtn');
     if (joinButton) {
         joinButton.onclick = () => showPage(PAGE_IDS.JOIN_SESSION);
+        console.log('Join button bound');
     }
 
     const createForm = document.getElementById('createSessionForm');
     if (createForm) {
         createForm.onsubmit = handleCreateSession;
+        console.log('Create form bound');
     }
 
     const joinForm = document.getElementById('joinSessionForm');
@@ -1104,20 +1377,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         joinForm.onsubmit = (event) => {
             event.preventDefault();
             
-            const inputs = joinForm.querySelectorAll('input[type="text"]');
-            let joinCode = '';
-            let playerName = '';
+            const joinCodeInput = document.getElementById('joinCode');
+            const playerNameInput = document.getElementById('joinPlayerName');
             
-            inputs.forEach(input => {
-                const placeholder = input.placeholder.toLowerCase();
-                const value = input.value.trim();
-                
-                if (placeholder.includes('code') || placeholder.includes('session')) {
-                    joinCode = value;
-                } else if (placeholder.includes('name') || placeholder.includes('player')) {
-                    playerName = value;
-                }
-            });
+            const joinCode = joinCodeInput ? joinCodeInput.value.trim() : '';
+            const playerName = playerNameInput ? playerNameInput.value.trim() : '';
 
             if (joinCode && playerName) {
                 joinSession(joinCode.toUpperCase(), playerName, getRandomColor(), false);
@@ -1125,24 +1389,50 @@ document.addEventListener('DOMContentLoaded', async () => {
                 showMessage('Please enter both session code and your name.', 'error');
             }
         };
+        console.log('Join form bound');
+    }
+    
+    // Theme toggle
+    const themeToggle = document.getElementById('themeToggle');
+    if (themeToggle) {
+        themeToggle.addEventListener('change', toggleTheme);
+        console.log('Theme toggle bound');
     }
 
-    // Spectator join button
-    const spectatorJoinButton = document.getElementById('spectatorJoinBtn');
-    if (spectatorJoinButton) {
-        spectatorJoinButton.onclick = () => {
-            const joinCodeInput = document.querySelector('#joinSessionForm input[placeholder*="code"], #joinSessionForm input[placeholder*="Code"], #joinSessionForm input[placeholder*="SESSION"]');
-            const spectatorNameInput = document.querySelector('#joinSessionForm input[placeholder*="name"], #joinSessionForm input[placeholder*="Name"]');
-            
+    // Spectator button
+    const spectatorButton = document.getElementById('spectatorBtn');
+    console.log('Looking for spectator button:', spectatorButton);
+    if (spectatorButton) {
+        spectatorButton.onclick = () => {
+            console.log('Spectator button clicked');
+            showPage('spectatorJoin');
+        };
+        console.log('Spectator button bound');
+    } else {
+        console.log('Spectator button not found!');
+    }
+
+    // Spectator join form
+    const spectatorJoinForm = document.getElementById('spectatorJoinForm');
+    if (spectatorJoinForm) {
+        spectatorJoinForm.onsubmit = (event) => {
+            event.preventDefault();
+            const joinCodeInput = document.getElementById('spectatorSessionCode');
             const joinCode = joinCodeInput ? joinCodeInput.value.trim() : '';
-            const spectatorName = spectatorNameInput ? spectatorNameInput.value.trim() : 'Spectator';
             
             if (joinCode) {
+                if (!window.firebaseInitialized || !window.firebaseConnectionStatus) {
+                    showMessage('Spectator mode requires Firebase connection. Currently running in local mode where sessions are only available on the host device.', 'error');
+                    return;
+                }
+                
+                const spectatorName = 'Spectator-' + Date.now().toString().slice(-4);
                 joinSession(joinCode.toUpperCase(), spectatorName, '#000000', true);
             } else {
                 showMessage('Please enter session code to join as spectator.', 'error');
             }
         };
+        console.log('Spectator join form bound');
     }
 
     // Player count controls
@@ -1158,6 +1448,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             }
         };
+        console.log('Increase player button bound');
     }
 
     const decreasePlayerButton = document.getElementById('decreasePlayerCount');
@@ -1172,17 +1463,32 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             }
         };
+        console.log('Decrease player button bound');
     }
-
-    // Leave session buttons
-    const leaveButtons = document.querySelectorAll('.leave-session-btn, #leaveSessionButton');
-    leaveButtons.forEach(button => {
-        button.onclick = leaveSession;
-    });
 
     console.log('App initialized successfully!');
     showPage(PAGE_IDS.LANDING);
 });
+
+// Theme Management
+function initializeTheme() {
+    const savedTheme = localStorage.getItem('gameScoreTheme') || 'light';
+    const themeToggle = document.getElementById('themeToggle');
+    
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    
+    if (themeToggle) {
+        themeToggle.checked = savedTheme === 'dark';
+    }
+}
+
+function toggleTheme() {
+    const themeToggle = document.getElementById('themeToggle');
+    const newTheme = themeToggle && themeToggle.checked ? 'dark' : 'light';
+    
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('gameScoreTheme', newTheme);
+}
 
 console.log('GameScore Pro script loaded - Enhanced with Teams, Colors, and Spectator Mode');
 
