@@ -1,10 +1,21 @@
-// GameScore Pro - Modern Implementation with Teams and Player Editing
+// GameScore Pro - Modern Implementation with Cross-Browser Session Sharing
 console.log('GameScore Pro starting...');
 
 // Global variables (avoid conflicts with firebase-config.js)
 let currentSession = null;
 let currentPlayerId = null;
 let currentPlayerName = "Guest";
+
+// Session sharing via URL parameters
+function getSessionFromURL() {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('session');
+}
+
+function shareSessionURL(sessionCode) {
+    const baseURL = window.location.origin + window.location.pathname;
+    return `${baseURL}?session=${sessionCode}`;
+}
 
 // Utility functions
 function showPage(pageId) {
@@ -32,6 +43,9 @@ function showMessage(text, type = 'info') {
         setTimeout(() => {
             messageContainer.classList.add('hidden');
         }, 5000);
+    } else {
+        // Fallback to alert if no message container
+        alert(text);
     }
 }
 
@@ -49,14 +63,14 @@ function getRandomColor() {
     return colors[Math.floor(Math.random() * colors.length)];
 }
 
-// Session management
+// Enhanced session management with cross-browser sharing
 function createSession() {
-    const sessionName = document.getElementById('sessionName').value.trim() || 'Game Session';
-    const playerCount = parseInt(document.getElementById('playerCountDisplay').textContent);
-    const startingScore = parseInt(document.getElementById('startingScore').value) || 0;
-    const allowDecimals = document.getElementById('allowDecimals').checked;
-    const targetScore = parseInt(document.getElementById('targetScore').value) || null;
-    const playAfterTarget = document.getElementById('playAfterTarget').checked;
+    const sessionName = document.getElementById('sessionName')?.value.trim() || 'Game Session';
+    const playerCount = parseInt(document.getElementById('playerCountDisplay')?.textContent) || 2;
+    const startingScore = parseInt(document.getElementById('startingScore')?.value) || 0;
+    const allowDecimals = document.getElementById('allowDecimals')?.checked || false;
+    const targetScore = parseInt(document.getElementById('targetScore')?.value) || null;
+    const playAfterTarget = document.getElementById('playAfterTarget')?.checked || false;
 
     const sessionCode = generateSessionCode();
     
@@ -72,7 +86,8 @@ function createSession() {
         teams: {},
         isHost: true,
         createdAt: Date.now(),
-        lastUpdated: Date.now()
+        lastUpdated: Date.now(),
+        shareURL: shareSessionURL(sessionCode)
     };
 
     // Create host player
@@ -110,8 +125,20 @@ function createSession() {
         currentSession.players.push(player);
     }
 
-    // Save to localStorage
-    localStorage.setItem(`gameScore_session_${sessionCode}`, JSON.stringify(currentSession));
+    // Save to localStorage AND sessionStorage for better sharing
+    const sessionData = JSON.stringify(currentSession);
+    localStorage.setItem(`gameScore_session_${sessionCode}`, sessionData);
+    sessionStorage.setItem(`gameScore_session_${sessionCode}`, sessionData);
+    
+    // Also save to a global sessions list
+    const allSessions = JSON.parse(localStorage.getItem('gameScore_allSessions') || '{}');
+    allSessions[sessionCode] = {
+        code: sessionCode,
+        name: sessionName,
+        createdAt: Date.now(),
+        lastUpdated: Date.now()
+    };
+    localStorage.setItem('gameScore_allSessions', JSON.stringify(allSessions));
 
     console.log('Session created:', currentSession);
     updateSessionSuccessPage();
@@ -121,61 +148,94 @@ function createSession() {
 function updateSessionSuccessPage() {
     if (!currentSession) return;
 
-    document.getElementById('displaySessionCode').textContent = currentSession.code;
-    document.getElementById('displaySessionName').textContent = currentSession.name;
-    document.getElementById('displayPlayerCount').textContent = currentSession.playerCount;
-    document.getElementById('displayStartingScore').textContent = currentSession.startingScore;
-    document.getElementById('displayTargetScore').textContent = currentSession.targetScore || 'None';
-    document.getElementById('instructionSessionCode').textContent = currentSession.code;
+    const elements = {
+        displaySessionCode: document.getElementById('displaySessionCode'),
+        displaySessionName: document.getElementById('displaySessionName'),
+        displayPlayerCount: document.getElementById('displayPlayerCount'),
+        displayStartingScore: document.getElementById('displayStartingScore'),
+        displayTargetScore: document.getElementById('displayTargetScore'),
+        instructionSessionCode: document.getElementById('instructionSessionCode')
+    };
+
+    if (elements.displaySessionCode) elements.displaySessionCode.textContent = currentSession.code;
+    if (elements.displaySessionName) elements.displaySessionName.textContent = currentSession.name;
+    if (elements.displayPlayerCount) elements.displayPlayerCount.textContent = currentSession.playerCount;
+    if (elements.displayStartingScore) elements.displayStartingScore.textContent = currentSession.startingScore;
+    if (elements.displayTargetScore) elements.displayTargetScore.textContent = currentSession.targetScore || 'None';
+    if (elements.instructionSessionCode) elements.instructionSessionCode.textContent = currentSession.code;
 }
 
 function joinSession(sessionCode, playerName) {
-    // Try to load from localStorage
-    const sessionKey = `gameScore_session_${sessionCode}`;
-    const sessionData = localStorage.getItem(sessionKey);
+    console.log(`Attempting to join session ${sessionCode} as ${playerName}`);
+    
+    // Try multiple storage locations
+    let sessionData = localStorage.getItem(`gameScore_session_${sessionCode}`) ||
+                     sessionStorage.getItem(`gameScore_session_${sessionCode}`);
     
     if (sessionData) {
-        currentSession = JSON.parse(sessionData);
-        
-        // Check if player already exists
-        const existingPlayer = currentSession.players.find(p => p.name === playerName);
-        if (existingPlayer) {
-            currentPlayerId = existingPlayer.id;
-            currentPlayerName = playerName;
-            showMessage(`Rejoined as ${playerName}`, 'success');
-        } else {
-            // Add new player if there's space
-            if (currentSession.players.length < currentSession.playerCount) {
-                const newPlayer = {
-                    id: `player_${Date.now()}`,
-                    name: playerName,
-                    score: currentSession.startingScore,
-                    color: getRandomColor(),
-                    isHost: false,
-                    history: [{
-                        score: currentSession.startingScore,
-                        change: 0,
-                        timestamp: Date.now()
-                    }]
-                };
-                
-                currentSession.players.push(newPlayer);
-                currentPlayerId = newPlayer.id;
+        try {
+            currentSession = JSON.parse(sessionData);
+            
+            // Check if player already exists
+            const existingPlayer = currentSession.players.find(p => p.name === playerName);
+            if (existingPlayer) {
+                currentPlayerId = existingPlayer.id;
                 currentPlayerName = playerName;
-                
-                // Save updated session
-                localStorage.setItem(sessionKey, JSON.stringify(currentSession));
-                showMessage(`Joined as ${playerName}`, 'success');
+                showMessage(`Rejoined as ${playerName}`, 'success');
             } else {
-                showMessage('Session is full', 'error');
-                return;
+                // Add new player if there's space
+                if (currentSession.players.length < currentSession.playerCount) {
+                    const newPlayer = {
+                        id: `player_${Date.now()}`,
+                        name: playerName,
+                        score: currentSession.startingScore,
+                        color: getRandomColor(),
+                        isHost: false,
+                        history: [{
+                            score: currentSession.startingScore,
+                            change: 0,
+                            timestamp: Date.now()
+                        }]
+                    };
+                    
+                    currentSession.players.push(newPlayer);
+                    currentPlayerId = newPlayer.id;
+                    currentPlayerName = playerName;
+                    currentSession.isHost = false; // This player is not the host
+                    
+                    // Save updated session
+                    const updatedData = JSON.stringify(currentSession);
+                    localStorage.setItem(`gameScore_session_${sessionCode}`, updatedData);
+                    sessionStorage.setItem(`gameScore_session_${sessionCode}`, updatedData);
+                    
+                    showMessage(`Joined as ${playerName}`, 'success');
+                } else {
+                    showMessage('Session is full', 'error');
+                    return;
+                }
             }
+            
+            updateScorekeeperInterface();
+            showPage('scorekeeper');
+        } catch (error) {
+            console.error('Error parsing session data:', error);
+            showMessage('Session data is corrupted. Please try again.', 'error');
+        }
+    } else {
+        // Enhanced error message with suggestions
+        const allSessions = JSON.parse(localStorage.getItem('gameScore_allSessions') || '{}');
+        const availableSessions = Object.keys(allSessions);
+        
+        let errorMessage = `Session "${sessionCode}" not found.`;
+        
+        if (availableSessions.length > 0) {
+            errorMessage += `\n\nAvailable sessions on this device: ${availableSessions.join(', ')}`;
+        } else {
+            errorMessage += '\n\nNo sessions found on this device. Make sure you\'re using the same browser/device where the session was created, or ask the host to share the session URL.';
         }
         
-        updateScorekeeperInterface();
-        showPage('scorekeeper');
-    } else {
-        showMessage('Session not found. Make sure the code is correct.', 'error');
+        showMessage(errorMessage, 'error');
+        console.log('Available sessions:', availableSessions);
     }
 }
 
@@ -183,39 +243,48 @@ function updateScorekeeperInterface() {
     if (!currentSession) return;
 
     // Update header info
-    document.getElementById('scorekeeperSessionCode').textContent = currentSession.code;
-    document.getElementById('scorekeeperSessionName').textContent = currentSession.name;
-    document.getElementById('scorekeeperTargetScore').textContent = currentSession.targetScore || 'None';
-    document.getElementById('scorekeeperPlayerCount').textContent = currentSession.players.length;
+    const elements = {
+        scorekeeperSessionCode: document.getElementById('scorekeeperSessionCode'),
+        scorekeeperSessionName: document.getElementById('scorekeeperSessionName'),
+        scorekeeperTargetScore: document.getElementById('scorekeeperTargetScore'),
+        scorekeeperPlayerCount: document.getElementById('scorekeeperPlayerCount')
+    };
+
+    if (elements.scorekeeperSessionCode) elements.scorekeeperSessionCode.textContent = currentSession.code;
+    if (elements.scorekeeperSessionName) elements.scorekeeperSessionName.textContent = currentSession.name;
+    if (elements.scorekeeperTargetScore) elements.scorekeeperTargetScore.textContent = currentSession.targetScore || 'None';
+    if (elements.scorekeeperPlayerCount) elements.scorekeeperPlayerCount.textContent = currentSession.players.length;
 
     // Update players grid
     const playersContainer = document.getElementById('playersContainer');
-    playersContainer.innerHTML = '';
+    if (playersContainer) {
+        playersContainer.innerHTML = '';
 
-    currentSession.players.forEach(player => {
-        const playerCard = document.createElement('div');
-        playerCard.className = 'player-card';
-        playerCard.innerHTML = `
-            <div class="player-header">
-                <div class="player-name" onclick="editPlayerName('${player.id}', '${player.name}')" style="cursor: pointer; text-decoration: underline;" title="Click to edit name">${player.name}</div>
-                <div class="player-score" style="color: ${player.color}">${player.score}</div>
-            </div>
-            <div class="score-controls">
-                <button class="score-btn negative" onclick="updateScore('${player.id}', -10)">-10</button>
-                <button class="score-btn negative" onclick="updateScore('${player.id}', -5)">-5</button>
-                <button class="score-btn negative" onclick="updateScore('${player.id}', -1)">-1</button>
-                <button class="score-btn neutral" onclick="showCustomScoreInput('${player.id}')">1</button>
-                <button class="score-btn positive" onclick="updateScore('${player.id}', 1)">+</button>
-                <button class="score-btn positive" onclick="updateScore('${player.id}', 5)">+5</button>
-                <button class="score-btn positive" onclick="updateScore('${player.id}', 10)">+10</button>
-            </div>
-            <div class="player-actions">
-                <button class="btn btn-secondary" onclick="resetPlayerScore('${player.id}')" style="font-size: 12px; padding: 4px 8px;">Reset</button>
-                <button class="btn btn-secondary" onclick="updatePlayerColor('${player.id}')" style="font-size: 12px; padding: 4px 8px;">Color</button>
-            </div>
-        `;
-        playersContainer.appendChild(playerCard);
-    });
+        currentSession.players.forEach(player => {
+            const playerCard = document.createElement('div');
+            playerCard.className = 'player-card';
+            playerCard.innerHTML = `
+                <div class="player-header">
+                    <div class="player-name" onclick="editPlayerName('${player.id}', '${player.name}')" style="cursor: pointer; text-decoration: underline;" title="Click to edit name">${player.name}</div>
+                    <div class="player-score" style="color: ${player.color}">${player.score}</div>
+                </div>
+                <div class="score-controls">
+                    <button class="score-btn negative" onclick="updateScore('${player.id}', -10)">-10</button>
+                    <button class="score-btn negative" onclick="updateScore('${player.id}', -5)">-5</button>
+                    <button class="score-btn negative" onclick="updateScore('${player.id}', -1)">-1</button>
+                    <button class="score-btn neutral" onclick="showCustomScoreInput('${player.id}')">1</button>
+                    <button class="score-btn positive" onclick="updateScore('${player.id}', 1)">+</button>
+                    <button class="score-btn positive" onclick="updateScore('${player.id}', 5)">+5</button>
+                    <button class="score-btn positive" onclick="updateScore('${player.id}', 10)">+10</button>
+                </div>
+                <div class="player-actions">
+                    <button class="btn btn-secondary" onclick="resetPlayerScore('${player.id}')" style="font-size: 12px; padding: 4px 8px;">Reset</button>
+                    <button class="btn btn-secondary" onclick="updatePlayerColor('${player.id}')" style="font-size: 12px; padding: 4px 8px;">Color</button>
+                </div>
+            `;
+            playersContainer.appendChild(playerCard);
+        });
+    }
 
     // Show team scores if teams exist
     if (Object.keys(currentSession.teams).length > 0) {
@@ -242,9 +311,10 @@ async function editPlayerName(playerId, currentName) {
             currentPlayerName = newName;
         }
 
-        // Save to localStorage
-        const sessionKey = `gameScore_session_${currentSession.code}`;
-        localStorage.setItem(sessionKey, JSON.stringify(currentSession));
+        // Save to both storage types
+        const sessionData = JSON.stringify(currentSession);
+        localStorage.setItem(`gameScore_session_${currentSession.code}`, sessionData);
+        sessionStorage.setItem(`gameScore_session_${currentSession.code}`, sessionData);
 
         updateScorekeeperInterface();
         showMessage(`Name updated to ${newName}!`, 'success');
@@ -270,9 +340,10 @@ async function updatePlayerColor(playerId) {
             currentSession.players[playerIndex].color = colors[colorIndex];
             currentSession.lastUpdated = Date.now();
 
-            // Save to localStorage
-            const sessionKey = `gameScore_session_${currentSession.code}`;
-            localStorage.setItem(sessionKey, JSON.stringify(currentSession));
+            // Save to both storage types
+            const sessionData = JSON.stringify(currentSession);
+            localStorage.setItem(`gameScore_session_${currentSession.code}`, sessionData);
+            sessionStorage.setItem(`gameScore_session_${currentSession.code}`, sessionData);
 
             updateScorekeeperInterface();
             showMessage(`Color updated to ${colorNames[colorIndex]}!`, 'success');
@@ -296,9 +367,10 @@ async function resetPlayerScore(playerId) {
             });
             currentSession.lastUpdated = Date.now();
 
-            // Save to localStorage
-            const sessionKey = `gameScore_session_${currentSession.code}`;
-            localStorage.setItem(sessionKey, JSON.stringify(currentSession));
+            // Save to both storage types
+            const sessionData = JSON.stringify(currentSession);
+            localStorage.setItem(`gameScore_session_${currentSession.code}`, sessionData);
+            sessionStorage.setItem(`gameScore_session_${currentSession.code}`, sessionData);
 
             updateScorekeeperInterface();
             showMessage(`${currentSession.players[playerIndex].name}'s score reset!`, 'success');
@@ -331,9 +403,10 @@ function createTeam() {
             color: getRandomColor()
         };
 
-        // Save to localStorage
-        const sessionKey = `gameScore_session_${currentSession.code}`;
-        localStorage.setItem(sessionKey, JSON.stringify(currentSession));
+        // Save to both storage types
+        const sessionData = JSON.stringify(currentSession);
+        localStorage.setItem(`gameScore_session_${currentSession.code}`, sessionData);
+        sessionStorage.setItem(`gameScore_session_${currentSession.code}`, sessionData);
 
         updateTeamScores();
         showMessage(`Team "${teamName}" created!`, 'success');
@@ -352,9 +425,10 @@ function addPlayerToTeam(playerId, teamId) {
     if (currentSession.teams[teamId]) {
         currentSession.teams[teamId].players.push(playerId);
         
-        // Save to localStorage
-        const sessionKey = `gameScore_session_${currentSession.code}`;
-        localStorage.setItem(sessionKey, JSON.stringify(currentSession));
+        // Save to both storage types
+        const sessionData = JSON.stringify(currentSession);
+        localStorage.setItem(`gameScore_session_${currentSession.code}`, sessionData);
+        sessionStorage.setItem(`gameScore_session_${currentSession.code}`, sessionData);
 
         updateTeamScores();
     }
@@ -386,11 +460,16 @@ function updateTeamScores() {
     // Add team scores to the page
     let teamContainer = document.getElementById('teamScoresContainer');
     if (!teamContainer) {
-        teamContainer = document.createElement('div');
-        teamContainer.id = 'teamScoresContainer';
-        document.getElementById('playersContainer').parentNode.insertBefore(teamContainer, document.getElementById('playersContainer').nextSibling);
+        const playersContainer = document.getElementById('playersContainer');
+        if (playersContainer && playersContainer.parentNode) {
+            teamContainer = document.createElement('div');
+            teamContainer.id = 'teamScoresContainer';
+            playersContainer.parentNode.insertBefore(teamContainer, playersContainer.nextSibling);
+        }
     }
-    teamContainer.innerHTML = teamScoresHtml;
+    if (teamContainer) {
+        teamContainer.innerHTML = teamScoresHtml;
+    }
 }
 
 // Score management
@@ -415,10 +494,11 @@ function updateScore(playerId, amount) {
 
     console.log(`Player ${playerId} score changed by ${amount} to ${newScore}`);
 
-    // Save to localStorage
+    // Save to both storage types
     if (currentSession.code) {
-        const sessionKey = `gameScore_session_${currentSession.code}`;
-        localStorage.setItem(sessionKey, JSON.stringify(currentSession));
+        const sessionData = JSON.stringify(currentSession);
+        localStorage.setItem(`gameScore_session_${currentSession.code}`, sessionData);
+        sessionStorage.setItem(`gameScore_session_${currentSession.code}`, sessionData);
     }
 
     updateScorekeeperInterface();
@@ -455,8 +535,8 @@ function handleCreateSession(event) {
 function handleJoinSession(event) {
     event.preventDefault();
     
-    const joinCode = document.getElementById('joinCode').value.trim().toUpperCase();
-    const playerName = document.getElementById('joinPlayerName').value.trim();
+    const joinCode = document.getElementById('joinCode')?.value.trim().toUpperCase();
+    const playerName = document.getElementById('joinPlayerName')?.value.trim();
     
     if (joinCode && playerName) {
         console.log(`Attempting to join session ${joinCode} as ${playerName}`);
@@ -468,10 +548,11 @@ function handleJoinSession(event) {
 
 function copySessionCode() {
     if (currentSession) {
-        navigator.clipboard.writeText(currentSession.code).then(() => {
-            showMessage('Session code copied to clipboard!', 'success');
+        const shareURL = shareSessionURL(currentSession.code);
+        navigator.clipboard.writeText(shareURL).then(() => {
+            showMessage('Session URL copied to clipboard! Share this with other players.', 'success');
         }).catch(() => {
-            showMessage('Failed to copy code. Please copy manually: ' + currentSession.code, 'error');
+            showMessage(`Failed to copy URL. Please copy manually: ${shareURL}`, 'error');
         });
     }
 }
@@ -479,6 +560,17 @@ function copySessionCode() {
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Page loaded, initializing...');
+
+    // Check for session in URL
+    const sessionFromURL = getSessionFromURL();
+    if (sessionFromURL) {
+        // Auto-fill join form if session code is in URL
+        const joinCodeInput = document.getElementById('joinCode');
+        if (joinCodeInput) {
+            joinCodeInput.value = sessionFromURL;
+            showPage('joinSession');
+        }
+    }
 
     // Check if elements exist before binding events
     const createSessionCard = document.getElementById('createSessionCard');
@@ -589,9 +681,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
                     });
                     
-                    // Save to localStorage
-                    const sessionKey = `gameScore_session_${currentSession.code}`;
-                    localStorage.setItem(sessionKey, JSON.stringify(currentSession));
+                    // Save to both storage types
+                    const sessionData = JSON.stringify(currentSession);
+                    localStorage.setItem(`gameScore_session_${currentSession.code}`, sessionData);
+                    sessionStorage.setItem(`gameScore_session_${currentSession.code}`, sessionData);
                     
                     updateScorekeeperInterface();
                     showMessage('All scores have been reset!', 'success');
