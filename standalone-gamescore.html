@@ -1,0 +1,1727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GameScore Pro - Standalone</title>
+    <style>
+        /* CSS Variables for theming */
+        :root {
+            --bg-primary: #f8fafc;
+            --bg-secondary: #f1f5f9;
+            --bg-card: #ffffff;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --accent-primary: #4f46e5;
+            --accent-secondary: #818cf8;
+            --border-color: #e2e8f0;
+            --shadow-color: rgba(0, 0, 0, 0.05);
+            --success-color: #10b981;
+            --error-color: #ef4444;
+            --warning-color: #f59e0b;
+            --info-color: #3b82f6;
+            --btn-primary-bg: #4f46e5;
+            --btn-primary-text: #ffffff;
+            --btn-secondary-bg: #e2e8f0;
+            --btn-secondary-text: #1e293b;
+            --btn-success-bg: #10b981;
+            --btn-success-text: #ffffff;
+            --btn-danger-bg: #ef4444;
+            --btn-danger-text: #ffffff;
+            --card-border-radius: 12px;
+            --btn-border-radius: 8px;
+            --input-border-radius: 6px;
+            --transition-speed: 0.3s;
+        }
+
+        /* Dark theme */
+        [data-theme="dark"] {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-card: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --accent-primary: #818cf8;
+            --accent-secondary: #4f46e5;
+            --border-color: #334155;
+            --shadow-color: rgba(0, 0, 0, 0.2);
+            --btn-primary-bg: #4f46e5;
+            --btn-primary-text: #ffffff;
+            --btn-secondary-bg: #334155;
+            --btn-secondary-text: #f1f5f9;
+        }
+
+        /* Base styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            transition: background-color var(--transition-speed), color var(--transition-speed);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            background-color: var(--bg-card);
+            border-radius: var(--card-border-radius);
+            box-shadow: 0 4px 6px var(--shadow-color);
+            margin-bottom: 30px;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--accent-primary);
+        }
+
+        .tagline {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .status-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .connection-status {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .connection-status.online {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: #10b981;
+        }
+
+        .connection-status.local {
+            background-color: rgba(59, 130, 246, 0.1);
+            color: #3b82f6;
+        }
+
+        .connection-status.offline {
+            background-color: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+        }
+
+        .connection-status::before {
+            content: "•";
+            font-size: 20px;
+        }
+
+        .export-btn {
+            padding: 6px 12px;
+            background-color: var(--btn-secondary-bg);
+            color: var(--btn-secondary-text);
+            border-radius: var(--btn-border-radius);
+            text-decoration: none;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+
+        .export-btn:hover {
+            background-color: var(--accent-primary);
+            color: white;
+        }
+
+        .theme-toggle {
+            cursor: pointer;
+            font-size: 20px;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background-color: var(--btn-secondary-bg);
+            color: var(--btn-secondary-text);
+            transition: background-color 0.2s;
+        }
+
+        .theme-toggle:hover {
+            background-color: var(--accent-primary);
+            color: white;
+        }
+
+        /* Message container */
+        .message {
+            padding: 15px;
+            border-radius: var(--card-border-radius);
+            margin-bottom: 20px;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        .message.hidden {
+            display: none;
+        }
+
+        .message.success {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: var(--success-color);
+            border-left: 4px solid var(--success-color);
+        }
+
+        .message.error {
+            background-color: rgba(239, 68, 68, 0.1);
+            color: var(--error-color);
+            border-left: 4px solid var(--error-color);
+        }
+
+        .message.info {
+            background-color: rgba(59, 130, 246, 0.1);
+            color: var(--info-color);
+            border-left: 4px solid var(--info-color);
+        }
+
+        .message.warning {
+            background-color: rgba(245, 158, 11, 0.1);
+            color: var(--warning-color);
+            border-left: 4px solid var(--warning-color);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Pages */
+        .page {
+            display: none;
+        }
+
+        .page.active {
+            display: block;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        /* Cards grid */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 20px;
+        }
+
+        .card {
+            background-color: var(--bg-card);
+            border-radius: var(--card-border-radius);
+            padding: 30px;
+            text-align: center;
+            box-shadow: 0 4px 6px var(--shadow-color);
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px var(--shadow-color);
+        }
+
+        .card-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+
+        .card h2 {
+            color: var(--accent-primary);
+            margin-bottom: 10px;
+        }
+
+        .card p {
+            color: var(--text-secondary);
+        }
+
+        /* Forms */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--input-border-radius);
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 16px;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--accent-primary);
+        }
+
+        .player-count-control {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .count-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            background-color: var(--btn-secondary-bg);
+            color: var(--btn-secondary-text);
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .count-btn:hover {
+            background-color: var(--accent-primary);
+            color: white;
+        }
+
+        .count-display {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--text-primary);
+            min-width: 40px;
+            text-align: center;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: var(--btn-border-radius);
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-primary {
+            background-color: var(--btn-primary-bg);
+            color: var(--btn-primary-text);
+        }
+
+        .btn-secondary {
+            background-color: var(--btn-secondary-bg);
+            color: var(--btn-secondary-text);
+        }
+
+        .btn-success {
+            background-color: var(--btn-success-bg);
+            color: var(--btn-success-text);
+        }
+
+        .btn-danger {
+            background-color: var(--btn-danger-bg);
+            color: var(--btn-danger-text);
+        }
+
+        .back-btn {
+            margin-bottom: 20px;
+        }
+
+        /* Session success page */
+        .session-code-display {
+            background-color: var(--accent-primary);
+            color: white;
+            padding: 30px;
+            border-radius: var(--card-border-radius);
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .session-code {
+            font-size: 48px;
+            font-weight: bold;
+            letter-spacing: 5px;
+            margin: 15px 0;
+        }
+
+        .session-details, .how-to-join {
+            background-color: var(--bg-card);
+            border-radius: var(--card-border-radius);
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px var(--shadow-color);
+        }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+
+        .detail-label {
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .detail-value {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .how-to-join ol {
+            margin-left: 20px;
+            margin-top: 10px;
+        }
+
+        .how-to-join li {
+            margin-bottom: 10px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-top: 30px;
+        }
+
+        /* Scorekeeper view */
+        .scorekeeper-header {
+            background-color: var(--bg-card);
+            border-radius: var(--card-border-radius);
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px var(--shadow-color);
+        }
+
+        .players-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .player-card {
+            background-color: var(--bg-card);
+            border-radius: var(--card-border-radius);
+            padding: 20px;
+            box-shadow: 0 4px 6px var(--shadow-color);
+        }
+
+        .player-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .player-name {
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        .player-score {
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .score-controls {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .score-btn {
+            padding: 8px;
+            border: none;
+            border-radius: var(--btn-border-radius);
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+
+        .score-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .score-btn:active {
+            transform: translateY(0);
+        }
+
+        .score-btn.positive {
+            background-color: rgba(16, 185, 129, 0.2);
+            color: var(--success-color);
+        }
+
+        .score-btn.negative {
+            background-color: rgba(239, 68, 68, 0.2);
+            color: var(--error-color);
+        }
+
+        .score-btn.neutral {
+            background-color: rgba(59, 130, 246, 0.2);
+            color: var(--info-color);
+        }
+
+        .player-actions {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* Team scores */
+        .team-scores {
+            background-color: var(--bg-card);
+            border-radius: var(--card-border-radius);
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px var(--shadow-color);
+        }
+
+        .team-score-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            margin: 10px 0;
+            background-color: var(--bg-secondary);
+            border-radius: var(--card-border-radius);
+        }
+
+        .team-name {
+            font-weight: 500;
+            flex: 1;
+        }
+
+        .team-score {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 0 20px;
+        }
+
+        .team-players {
+            color: var(--text-secondary);
+            font-size: 14px;
+            flex: 2;
+            text-align: right;
+        }
+
+        /* Player view */
+        .player-view-header {
+            background-color: var(--bg-card);
+            border-radius: var(--card-border-radius);
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px var(--shadow-color);
+        }
+
+        .player-view-content {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 30px;
+        }
+
+        .current-player-card {
+            background-color: var(--bg-card);
+            border-radius: var(--card-border-radius);
+            padding: 30px;
+            text-align: center;
+            box-shadow: 0 4px 6px var(--shadow-color);
+        }
+
+        .player-view-score {
+            font-size: 72px;
+            font-weight: bold;
+            color: var(--accent-primary);
+            margin: 20px 0;
+        }
+
+        .all-players-list {
+            background-color: var(--bg-card);
+            border-radius: var(--card-border-radius);
+            padding: 20px;
+            box-shadow: 0 4px 6px var(--shadow-color);
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+            
+            .status-controls {
+                width: 100%;
+                justify-content: center;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+            }
+            
+            .session-code {
+                font-size: 36px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .players-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .score-controls {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            
+            .score-btn {
+                padding: 6px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div>
+                <div class="logo">GameScore Pro</div>
+                <div class="tagline">Universal score tracking for any game</div>
+            </div>
+            <div class="status-controls">
+                <div id="connectionStatus" class="connection-status local">Local Mode</div>
+                <a href="#" class="export-btn">📊 Export</a>
+                <div class="theme-toggle" id="themeToggle">🌙</div>
+            </div>
+        </header>
+
+        <!-- Message Container -->
+        <div id="messageContainer" class="message hidden"></div>
+
+        <!-- Landing Page -->
+        <div id="landing" class="page active">
+            <div class="cards-grid">
+                <div class="card" id="createSessionCard">
+                    <div class="card-icon">🎮</div>
+                    <h2>Create New Session</h2>
+                    <p>Start a new game and be the scorekeeper</p>
+                </div>
+                
+                <div class="card" id="joinSessionCard">
+                    <div class="card-icon">👥</div>
+                    <h2>Join Session</h2>
+                    <p>Enter a code to join an existing game</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Create Session Page -->
+        <div id="createSession" class="page">
+            <button class="btn btn-secondary" id="backToLanding">← Back</button>
+            <h1>Create New Session</h1>
+            
+            <form id="createSessionForm">
+                <div class="form-group">
+                    <label for="sessionName">Session Name (Optional)</label>
+                    <input type="text" id="sessionName" class="form-control" placeholder="e.g., Friday Night Cards">
+                </div>
+                
+                <div class="form-group">
+                    <label for="playerCountDisplay">Number of Players</label>
+                    <div class="player-count-control">
+                        <button type="button" id="decreasePlayerCount" class="count-btn">-</button>
+                        <div id="playerCountDisplay" class="count-display">2</div>
+                        <button type="button" id="increasePlayerCount" class="count-btn">+</button>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="startingScore">Starting Score</label>
+                    <input type="number" id="startingScore" class="form-control" value="0">
+                </div>
+                
+                <div class="form-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="allowDecimals">
+                        <label for="allowDecimals">Allow decimal scores</label>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="targetScore">Target Score (Optional)</label>
+                    <input type="number" id="targetScore" class="form-control" placeholder="e.g., 100">
+                </div>
+                
+                <div class="form-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="playAfterTarget">
+                        <label for="playAfterTarget">Continue playing after target score is reached</label>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">🎲 Create Session</button>
+            </form>
+        </div>
+
+        <!-- Join Session Page -->
+        <div id="joinSession" class="page">
+            <button class="btn btn-secondary" id="backToLandingFromJoin">← Back</button>
+            <h1>Join Session</h1>
+            
+            <form id="joinSessionForm">
+                <div class="form-group">
+                    <label for="joinCode">Session Code</label>
+                    <input type="text" id="joinCode" class="form-control" placeholder="Enter 6-character code" maxlength="6" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="joinPlayerName">Your Name</label>
+                    <input type="text" id="joinPlayerName" class="form-control" placeholder="Enter your name" required>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">👋 Join Game</button>
+            </form>
+        </div>
+
+        <!-- Session Success Page -->
+        <div id="sessionSuccess" class="page">
+            <h1>🎉 Session Created Successfully!</h1>
+            
+            <div class="session-code-display">
+                <p>Session Code:</p>
+                <div id="displaySessionCode" class="session-code">U2LY11</div>
+                <p>Share this code with other players</p>
+            </div>
+            
+            <div class="session-details">
+                <h3>Session Details:</h3>
+                <div class="detail-row">
+                    <div class="detail-label">Name:</div>
+                    <div id="displaySessionName" class="detail-value">Game Session</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Players:</div>
+                    <div id="displayPlayerCount" class="detail-value">2</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Starting Score:</div>
+                    <div id="displayStartingScore" class="detail-value">0</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Target Score:</div>
+                    <div id="displayTargetScore" class="detail-value">111</div>
+                </div>
+            </div>
+            
+            <div class="how-to-join">
+                <h3>How to Join:</h3>
+                <ol>
+                    <li>Other players visit this page</li>
+                    <li>Click "Join Session"</li>
+                    <li>Enter the session code: <span id="instructionSessionCode">U2LY11</span></li>
+                    <li>Enter their name</li>
+                </ol>
+            </div>
+            
+            <div class="action-buttons">
+                <button id="startScoringBtn" class="btn btn-success">🎮 Start Scoring</button>
+                <button id="copyCodeBtn" class="btn btn-primary">📋 Copy Code</button>
+                <button id="backToHomeBtn" class="btn btn-secondary">← Back to Home</button>
+            </div>
+        </div>
+
+        <!-- Scorekeeper View -->
+        <div id="scorekeeper" class="page">
+            <div class="scorekeeper-header">
+                <h1>🎮 Scorekeeper Mode</h1>
+                <p>Session: <span id="scorekeeperSessionCode">U2LY11</span> | <span id="scorekeeperSessionName">Game Session</span></p>
+                <p>Target Score: <span id="scorekeeperTargetScore">111</span> | Managing <span id="scorekeeperPlayerCount">2</span> players</p>
+            </div>
+            
+            <div id="playersContainer" class="players-grid">
+                <!-- Player cards will be generated here -->
+            </div>
+            
+            <div id="teamScoresContainer">
+                <!-- Team scores will be generated here if teams exist -->
+            </div>
+            
+            <div class="action-buttons">
+                <button id="createTeamBtn" class="btn btn-primary" onclick="createTeam()">🏆 Create Team</button>
+                <button id="shareCodeBtn" class="btn btn-primary">🔗 Share Code</button>
+                <button id="resetScoresBtn" class="btn btn-secondary">🔄 Reset Scores</button>
+                <button id="endGameBtn" class="btn btn-danger">🚪 End Game</button>
+            </div>
+        </div>
+
+        <!-- Player View -->
+        <div id="playerView" class="page">
+            <div class="player-view-header">
+                <h1>👤 Player View</h1>
+                <p>Session: <span id="playerViewSessionCode">U2LY11</span> | <span id="playerViewSessionName">Game Session</span></p>
+            </div>
+            
+            <div class="player-view-content">
+                <div class="current-player-card">
+                    <h2>Your Score</h2>
+                    <div id="playerViewScore" class="player-view-score">0</div>
+                </div>
+                
+                <div class="all-players-list">
+                    <h3>All Players</h3>
+                    <div id="playerViewPlayersList">
+                        <!-- List of all players will be generated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Spectator View -->
+        <div id="spectatorView" class="page">
+            <div class="spectator-view-header">
+                <h1>👁️ Spectator View</h1>
+                <p>Session: <span id="spectatorViewSessionCode">U2LY11</span> | <span id="spectatorViewSessionName">Game Session</span></p>
+            </div>
+            
+            <div id="spectatorViewContent">
+                <!-- Spectator content will be generated here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Inline JavaScript - No external dependencies -->
+    <script>
+        // GameScore Pro - Standalone Implementation
+        console.log('GameScore Pro starting...');
+
+        // Global variables - No firebase dependencies
+        var currentSession = null;
+        var currentPlayerId = null;
+        var currentPlayerName = "Guest";
+
+        // Theme management
+        function initializeTheme() {
+            const savedTheme = localStorage.getItem('gameScore_theme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            updateThemeToggle(savedTheme);
+        }
+
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('gameScore_theme', newTheme);
+            updateThemeToggle(newTheme);
+            
+            console.log(`Theme switched to: ${newTheme}`);
+        }
+
+        function updateThemeToggle(theme) {
+            const themeToggle = document.getElementById('themeToggle');
+            if (themeToggle) {
+                themeToggle.textContent = theme === 'light' ? '🌙' : '☀️';
+                themeToggle.title = `Switch to ${theme === 'light' ? 'dark' : 'light'} mode`;
+            }
+        }
+
+        // Session sharing via URL parameters
+        function getSessionFromURL() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('session');
+        }
+
+        function updateURLWithSession(sessionCode) {
+            const url = new URL(window.location);
+            url.searchParams.set('session', sessionCode);
+            window.history.replaceState({}, '', url);
+        }
+
+        function shareSessionURL(sessionCode) {
+            const url = new URL(window.location);
+            url.searchParams.set('session', sessionCode);
+            return url.toString();
+        }
+
+        // Export functionality
+        function exportSessionData() {
+            if (!currentSession) {
+                showMessage('No active session to export.', 'error');
+                return;
+            }
+
+            const exportData = {
+                sessionInfo: {
+                    code: currentSession.code,
+                    name: currentSession.name,
+                    createdAt: new Date(currentSession.createdAt).toLocaleString(),
+                    playerCount: currentSession.playerCount,
+                    startingScore: currentSession.startingScore,
+                    targetScore: currentSession.targetScore
+                },
+                players: currentSession.players.map(player => ({
+                    name: player.name,
+                    finalScore: player.score,
+                    scoreHistory: player.history.map(entry => ({
+                        score: entry.score,
+                        change: entry.change,
+                        timestamp: new Date(entry.timestamp).toLocaleString()
+                    }))
+                })),
+                teams: Object.values(currentSession.teams || {}).map(team => ({
+                    name: team.name,
+                    players: team.players.map(id => {
+                        const player = currentSession.players.find(p => p.id === id);
+                        return player ? player.name : 'Unknown';
+                    }),
+                    totalScore: calculateTeamScore(team.players)
+                })),
+                summary: {
+                    totalGames: 1,
+                    winner: getWinner(),
+                    exportedAt: new Date().toLocaleString()
+                }
+            };
+
+            // Create downloadable file
+            const dataStr = JSON.stringify(exportData, null, 2);
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+            
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(dataBlob);
+            link.download = `GameScore_${currentSession.name}_${currentSession.code}.json`;
+            link.click();
+            
+            showMessage('Session data exported successfully!', 'success');
+        }
+
+        function getWinner() {
+            if (!currentSession || !currentSession.players.length) return 'No players';
+            
+            const sortedPlayers = [...currentSession.players].sort((a, b) => b.score - a.score);
+            const highestScore = sortedPlayers[0].score;
+            const winners = sortedPlayers.filter(p => p.score === highestScore);
+            
+            if (winners.length === 1) {
+                return winners[0].name;
+            } else {
+                return `Tie: ${winners.map(w => w.name).join(', ')}`;
+            }
+        }
+
+        // Utility functions
+        function showPage(pageId) {
+            // Hide all pages
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.remove('active');
+            });
+            
+            // Show target page
+            const targetPage = document.getElementById(pageId);
+            if (targetPage) {
+                targetPage.classList.add('active');
+                console.log(`Page shown successfully: ${pageId}`);
+            }
+        }
+
+        function showMessage(text, type = 'info') {
+            const messageContainer = document.getElementById('messageContainer');
+            if (messageContainer) {
+                messageContainer.textContent = text;
+                messageContainer.className = `message ${type}`;
+                messageContainer.classList.remove('hidden');
+                
+                // Auto-hide after 5 seconds
+                setTimeout(() => {
+                    messageContainer.classList.add('hidden');
+                }, 5000);
+            } else {
+                // Fallback to alert if no message container
+                alert(text);
+            }
+        }
+
+        function generateSessionCode() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let result = '';
+            for (let i = 0; i < 6; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return result;
+        }
+
+        function getRandomColor() {
+            const colors = ['#4f46e5', '#10b981', '#ef4444', '#f59e0b', '#8b5cf6', '#06b6d4'];
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+
+        // Enhanced session management with URL integration
+        function createSession() {
+            const sessionName = document.getElementById('sessionName')?.value.trim() || 'Game Session';
+            const playerCount = parseInt(document.getElementById('playerCountDisplay')?.textContent) || 2;
+            const startingScore = parseInt(document.getElementById('startingScore')?.value) || 0;
+            const allowDecimals = document.getElementById('allowDecimals')?.checked || false;
+            const targetScore = parseInt(document.getElementById('targetScore')?.value) || null;
+            const playAfterTarget = document.getElementById('playAfterTarget')?.checked || false;
+
+            const sessionCode = generateSessionCode();
+            
+            currentSession = {
+                code: sessionCode,
+                name: sessionName,
+                playerCount: playerCount,
+                startingScore: startingScore,
+                allowDecimals: allowDecimals,
+                targetScore: targetScore,
+                playAfterTarget: playAfterTarget,
+                players: [],
+                teams: {},
+                isHost: true,
+                createdAt: Date.now(),
+                lastUpdated: Date.now(),
+                shareURL: shareSessionURL(sessionCode)
+            };
+
+            // Create host player
+            const hostPlayer = {
+                id: 'host',
+                name: 'Player 1',
+                score: startingScore,
+                color: getRandomColor(),
+                isHost: true,
+                history: [{
+                    score: startingScore,
+                    change: 0,
+                    timestamp: Date.now()
+                }]
+            };
+
+            currentSession.players.push(hostPlayer);
+            currentPlayerId = 'host';
+            currentPlayerName = 'Player 1';
+
+            // Create additional players
+            for (let i = 2; i <= playerCount; i++) {
+                const player = {
+                    id: `player_${i}`,
+                    name: `Player ${i}`,
+                    score: startingScore,
+                    color: getRandomColor(),
+                    isHost: false,
+                    history: [{
+                        score: startingScore,
+                        change: 0,
+                        timestamp: Date.now()
+                    }]
+                };
+                currentSession.players.push(player);
+            }
+
+            // Save session data with multiple storage strategies
+            saveSessionData(sessionCode, currentSession);
+            
+            // Update URL with session code
+            updateURLWithSession(sessionCode);
+
+            console.log('Session created:', currentSession);
+            updateSessionSuccessPage();
+            showPage('sessionSuccess');
+        }
+
+        function saveSessionData(sessionCode, sessionData) {
+            const dataStr = JSON.stringify(sessionData);
+            
+            // Strategy 1: localStorage (browser-specific)
+            localStorage.setItem(`gameScore_session_${sessionCode}`, dataStr);
+            
+            // Strategy 2: sessionStorage (tab-specific)
+            sessionStorage.setItem(`gameScore_session_${sessionCode}`, dataStr);
+            
+            // Strategy 3: Global sessions registry
+            const allSessions = JSON.parse(localStorage.getItem('gameScore_allSessions') || '{}');
+            allSessions[sessionCode] = {
+                code: sessionCode,
+                name: sessionData.name,
+                createdAt: sessionData.createdAt,
+                lastUpdated: sessionData.lastUpdated,
+                data: dataStr // Store full data in registry too
+            };
+            localStorage.setItem('gameScore_allSessions', JSON.stringify(allSessions));
+            
+            // Strategy 4: URL-based sharing (encode session in URL hash for sharing)
+            const encodedSession = btoa(dataStr);
+            sessionData.encodedData = encodedSession;
+        }
+
+        function loadSessionData(sessionCode) {
+            // Try multiple strategies to find the session
+            
+            // Strategy 1: Direct localStorage
+            let sessionData = localStorage.getItem(`gameScore_session_${sessionCode}`);
+            if (sessionData) {
+                console.log('Found session in localStorage');
+                return JSON.parse(sessionData);
+            }
+            
+            // Strategy 2: sessionStorage
+            sessionData = sessionStorage.getItem(`gameScore_session_${sessionCode}`);
+            if (sessionData) {
+                console.log('Found session in sessionStorage');
+                return JSON.parse(sessionData);
+            }
+            
+            // Strategy 3: Global sessions registry
+            const allSessions = JSON.parse(localStorage.getItem('gameScore_allSessions') || '{}');
+            if (allSessions[sessionCode] && allSessions[sessionCode].data) {
+                console.log('Found session in global registry');
+                return JSON.parse(allSessions[sessionCode].data);
+            }
+            
+            // Strategy 4: URL hash (for shared sessions)
+            const urlParams = new URLSearchParams(window.location.search);
+            const encodedData = urlParams.get('data');
+            if (encodedData) {
+                try {
+                    const decodedData = atob(encodedData);
+                    const session = JSON.parse(decodedData);
+                    if (session.code === sessionCode) {
+                        console.log('Found session in URL data');
+                        // Save it locally for future use
+                        saveSessionData(sessionCode, session);
+                        return session;
+                    }
+                } catch (e) {
+                    console.error('Error decoding URL session data:', e);
+                }
+            }
+            
+            return null;
+        }
+
+        function updateSessionSuccessPage() {
+            if (!currentSession) return;
+
+            const elements = {
+                displaySessionCode: document.getElementById('displaySessionCode'),
+                displaySessionName: document.getElementById('displaySessionName'),
+                displayPlayerCount: document.getElementById('displayPlayerCount'),
+                displayStartingScore: document.getElementById('displayStartingScore'),
+                displayTargetScore: document.getElementById('displayTargetScore'),
+                instructionSessionCode: document.getElementById('instructionSessionCode')
+            };
+
+            if (elements.displaySessionCode) elements.displaySessionCode.textContent = currentSession.code;
+            if (elements.displaySessionName) elements.displaySessionName.textContent = currentSession.name;
+            if (elements.displayPlayerCount) elements.displayPlayerCount.textContent = currentSession.playerCount;
+            if (elements.displayStartingScore) elements.displayStartingScore.textContent = currentSession.startingScore;
+            if (elements.displayTargetScore) elements.displayTargetScore.textContent = currentSession.targetScore || 'None';
+            if (elements.instructionSessionCode) elements.instructionSessionCode.textContent = currentSession.code;
+        }
+
+        function joinSession(sessionCode, playerName) {
+            console.log(`Attempting to join session ${sessionCode} as ${playerName}`);
+            
+            const sessionData = loadSessionData(sessionCode);
+            
+            if (sessionData) {
+                try {
+                    currentSession = sessionData;
+                    
+                    // Check if player already exists
+                    const existingPlayer = currentSession.players.find(p => p.name === playerName);
+                    if (existingPlayer) {
+                        currentPlayerId = existingPlayer.id;
+                        currentPlayerName = playerName;
+                        showMessage(`Rejoined as ${playerName}`, 'success');
+                    } else {
+                        // Add new player if there's space
+                        if (currentSession.players.length < currentSession.playerCount) {
+                            const newPlayer = {
+                                id: `player_${Date.now()}`,
+                                name: playerName,
+                                score: currentSession.startingScore,
+                                color: getRandomColor(),
+                                isHost: false,
+                                history: [{
+                                    score: currentSession.startingScore,
+                                    change: 0,
+                                    timestamp: Date.now()
+                                }]
+                            };
+                            
+                            currentSession.players.push(newPlayer);
+                            currentPlayerId = newPlayer.id;
+                            currentPlayerName = playerName;
+                            currentSession.isHost = false; // This player is not the host
+                            
+                            // Save updated session
+                            saveSessionData(sessionCode, currentSession);
+                            
+                            showMessage(`Joined as ${playerName}`, 'success');
+                        } else {
+                            showMessage('Session is full', 'error');
+                            return;
+                        }
+                    }
+                    
+                    // Update URL with session code
+                    updateURLWithSession(sessionCode);
+                    
+                    updateScorekeeperInterface();
+                    showPage('scorekeeper');
+                } catch (error) {
+                    console.error('Error parsing session data:', error);
+                    showMessage('Session data is corrupted. Please try again.', 'error');
+                }
+            } else {
+                // Enhanced error message with suggestions
+                const allSessions = JSON.parse(localStorage.getItem('gameScore_allSessions') || '{}');
+                const availableSessions = Object.keys(allSessions);
+                
+                let errorMessage = `Session "${sessionCode}" not found.`;
+                
+                if (availableSessions.length > 0) {
+                    errorMessage += `\n\nAvailable sessions on this device: ${availableSessions.join(', ')}`;
+                } else {
+                    errorMessage += '\n\nNo sessions found on this device. Make sure you\'re using the same browser/device where the session was created, or ask the host to share the session URL.';
+                }
+                
+                showMessage(errorMessage, 'error');
+                console.log('Available sessions:', availableSessions);
+            }
+        }
+
+        function updateScorekeeperInterface() {
+            if (!currentSession) return;
+
+            // Update header info
+            const elements = {
+                scorekeeperSessionCode: document.getElementById('scorekeeperSessionCode'),
+                scorekeeperSessionName: document.getElementById('scorekeeperSessionName'),
+                scorekeeperTargetScore: document.getElementById('scorekeeperTargetScore'),
+                scorekeeperPlayerCount: document.getElementById('scorekeeperPlayerCount')
+            };
+
+            if (elements.scorekeeperSessionCode) elements.scorekeeperSessionCode.textContent = currentSession.code;
+            if (elements.scorekeeperSessionName) elements.scorekeeperSessionName.textContent = currentSession.name;
+            if (elements.scorekeeperTargetScore) elements.scorekeeperTargetScore.textContent = currentSession.targetScore || 'None';
+            if (elements.scorekeeperPlayerCount) elements.scorekeeperPlayerCount.textContent = currentSession.players.length;
+
+            // Update players grid
+            const playersContainer = document.getElementById('playersContainer');
+            if (playersContainer) {
+                playersContainer.innerHTML = '';
+
+                currentSession.players.forEach(player => {
+                    const playerCard = document.createElement('div');
+                    playerCard.className = 'player-card';
+                    playerCard.innerHTML = `
+                        <div class="player-header">
+                            <div class="player-name" onclick="editPlayerName('${player.id}', '${player.name}')" style="cursor: pointer; text-decoration: underline;" title="Click to edit name">${player.name}</div>
+                            <div class="player-score" style="color: ${player.color}">${player.score}</div>
+                        </div>
+                        <div class="score-controls">
+                            <button class="score-btn negative" onclick="updateScore('${player.id}', -10)">-10</button>
+                            <button class="score-btn negative" onclick="updateScore('${player.id}', -5)">-5</button>
+                            <button class="score-btn negative" onclick="updateScore('${player.id}', -1)">-1</button>
+                            <button class="score-btn neutral" onclick="showCustomScoreInput('${player.id}')">1</button>
+                            <button class="score-btn positive" onclick="updateScore('${player.id}', 1)">+</button>
+                            <button class="score-btn positive" onclick="updateScore('${player.id}', 5)">+5</button>
+                            <button class="score-btn positive" onclick="updateScore('${player.id}', 10)">+10</button>
+                        </div>
+                        <div class="player-actions">
+                            <button class="btn btn-secondary" onclick="resetPlayerScore('${player.id}')" style="font-size: 12px; padding: 4px 8px;">Reset</button>
+                            <button class="btn btn-secondary" onclick="updatePlayerColor('${player.id}')" style="font-size: 12px; padding: 4px 8px;">Color</button>
+                        </div>
+                    `;
+                    playersContainer.appendChild(playerCard);
+                });
+            }
+
+            // Show team scores if teams exist
+            if (Object.keys(currentSession.teams || {}).length > 0) {
+                updateTeamScores();
+            }
+        }
+
+        // Player management functions
+        function editPlayerName(playerId, currentName) {
+            if (!currentSession) return;
+
+            let newName = prompt(`Enter new name for ${currentName}:`, currentName);
+            if (newName === null || newName.trim() === '') return;
+            newName = newName.trim();
+
+            const playerIndex = currentSession.players.findIndex(p => p.id === playerId);
+            if (playerIndex === -1) return;
+
+            if (currentSession.isHost || playerId === currentPlayerId) {
+                currentSession.players[playerIndex].name = newName;
+                currentSession.lastUpdated = Date.now();
+
+                if (playerId === currentPlayerId) {
+                    currentPlayerName = newName;
+                }
+
+                // Save updated session
+                saveSessionData(currentSession.code, currentSession);
+
+                updateScorekeeperInterface();
+                showMessage(`Name updated to ${newName}!`, 'success');
+            } else {
+                showMessage('Only the host can edit other players\' names.', 'error');
+            }
+        }
+
+        function updatePlayerColor(playerId) {
+            if (!currentSession) return;
+
+            const colors = ['#4f46e5', '#10b981', '#ef4444', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899', '#14b8a6'];
+            const colorNames = ['Blue', 'Green', 'Red', 'Orange', 'Purple', 'Cyan', 'Pink', 'Teal'];
+            
+            let colorChoice = prompt(`Choose a color for the player:\n${colorNames.map((name, i) => `${i + 1}. ${name}`).join('\n')}\n\nEnter number (1-${colors.length}):`);
+            
+            if (colorChoice === null) return;
+            
+            const colorIndex = parseInt(colorChoice) - 1;
+            if (colorIndex >= 0 && colorIndex < colors.length) {
+                const playerIndex = currentSession.players.findIndex(p => p.id === playerId);
+                if (playerIndex !== -1) {
+                    currentSession.players[playerIndex].color = colors[colorIndex];
+                    currentSession.lastUpdated = Date.now();
+
+                    // Save updated session
+                    saveSessionData(currentSession.code, currentSession);
+
+                    updateScorekeeperInterface();
+                    showMessage(`Color updated to ${colorNames[colorIndex]}!`, 'success');
+                }
+            } else {
+                showMessage('Invalid color choice.', 'error');
+            }
+        }
+
+        function resetPlayerScore(playerId) {
+            if (!currentSession || !currentSession.isHost) return;
+
+            if (confirm('Are you sure you want to reset this player\'s score?')) {
+                const playerIndex = currentSession.players.findIndex(p => p.id === playerId);
+                if (playerIndex !== -1) {
+                    currentSession.players[playerIndex].score = currentSession.startingScore;
+                    currentSession.players[playerIndex].history.push({
+                        score: currentSession.startingScore,
+                        change: 0,
+                        timestamp: Date.now()
+                    });
+                    currentSession.lastUpdated = Date.now();
+
+                    // Save updated session
+                    saveSessionData(currentSession.code, currentSession);
+
+                    updateScorekeeperInterface();
+                    showMessage(`${currentSession.players[playerIndex].name}'s score reset!`, 'success');
+                }
+            }
+        }
+
+        // Team Management
+        function calculateTeamScore(playerIds) {
+            if (!currentSession || !playerIds) return 0;
+            return playerIds.reduce((total, playerId) => {
+                const player = currentSession.players.find(p => p.id === playerId);
+                return total + (player ? player.score : 0);
+            }, 0);
+        }
+
+        function createTeam() {
+            if (!currentSession || !currentSession.isHost) {
+                showMessage('Only the host can create teams.', 'error');
+                return;
+            }
+
+            const teamName = prompt('Enter team name:');
+            if (teamName && teamName.trim()) {
+                const teamId = `team_${Date.now()}`;
+                if (!currentSession.teams) currentSession.teams = {};
+                currentSession.teams[teamId] = {
+                    id: teamId,
+                    name: teamName.trim(),
+                    players: [],
+                    color: getRandomColor()
+                };
+
+                // Save updated session
+                saveSessionData(currentSession.code, currentSession);
+
+                updateTeamScores();
+                showMessage(`Team "${teamName}" created!`, 'success');
+            }
+        }
+
+        function addPlayerToTeam(playerId, teamId) {
+            if (!currentSession || !currentSession.isHost) return;
+
+            // Remove player from other teams first
+            Object.values(currentSession.teams).forEach(team => {
+                team.players = team.players.filter(id => id !== playerId);
+            });
+
+            // Add to new team
+            if (currentSession.teams[teamId]) {
+                currentSession.teams[teamId].players.push(playerId);
+                
+                // Save updated session
+                saveSessionData(currentSession.code, currentSession);
+
+                updateTeamScores();
+            }
+        }
+
+        function updateTeamScores() {
+            if (!currentSession || !currentSession.teams || Object.keys(currentSession.teams).length === 0) return;
+
+            let teamScoresHtml = '<div class="team-scores"><h3>Team Scores:</h3>';
+            
+            Object.values(currentSession.teams).forEach(team => {
+                const teamScore = calculateTeamScore(team.players);
+                const playerNames = team.players.map(id => {
+                    const player = currentSession.players.find(p => p.id === id);
+                    return player ? player.name : 'Unknown';
+                }).join(', ');
+
+                teamScoresHtml += `
+                    <div class="team-score-card" style="border-left: 4px solid ${team.color}">
+                        <div class="team-name">${team.name}</div>
+                        <div class="team-score">${teamScore}</div>
+                        <div class="team-players">${playerNames || 'No players'}</div>
+                    </div>
+                `;
+            });
+            
+            teamScoresHtml += '</div>';
+
+            // Add team scores to the page
+            let teamContainer = document.getElementById('teamScoresContainer');
+            if (!teamContainer) {
+                const playersContainer = document.getElementById('playersContainer');
+                if (playersContainer && playersContainer.parentNode) {
+                    teamContainer = document.createElement('div');
+                    teamContainer.id = 'teamScoresContainer';
+                    playersContainer.parentNode.insertBefore(teamContainer, playersContainer.nextSibling);
+                }
+            }
+            if (teamContainer) {
+                teamContainer.innerHTML = teamScoresHtml;
+            }
+        }
+
+        // Score management
+        function updateScore(playerId, amount) {
+            if (!currentSession) return;
+
+            const playerIndex = currentSession.players.findIndex(p => p.id === playerId);
+            if (playerIndex === -1) return;
+
+            let newScore = currentSession.players[playerIndex].score + amount;
+            if (!currentSession.allowDecimals) {
+                newScore = Math.round(newScore);
+            }
+
+            currentSession.players[playerIndex].score = newScore;
+            currentSession.players[playerIndex].history.push({
+                score: newScore,
+                change: amount,
+                timestamp: Date.now()
+            });
+            currentSession.lastUpdated = Date.now();
+
+            console.log(`Player ${currentSession.players[playerIndex].name} score changed by ${amount} to ${newScore}`);
+
+            // Save updated session
+            if (currentSession.code) {
+                saveSessionData(currentSession.code, currentSession);
+            }
+
+            updateScorekeeperInterface();
+        }
+
+        function showCustomScoreInput(playerId) {
+            const customAmount = prompt('Enter custom score amount (positive or negative):');
+            if (customAmount !== null && customAmount.trim() !== '') {
+                const amount = parseFloat(customAmount);
+                if (!isNaN(amount)) {
+                    updateScore(playerId, amount);
+                } else {
+                    showMessage('Please enter a valid number.', 'error');
+                }
+            }
+        }
+
+        // Event handlers
+        function handleCreateSession(event) {
+            event.preventDefault();
+            console.log('Creating session...');
+            createSession();
+        }
+
+        function handleJoinSession(event) {
+            event.preventDefault();
+            
+            const joinCode = document.getElementById('joinCode')?.value.trim().toUpperCase();
+            const playerName = document.getElementById('joinPlayerName')?.value.trim();
+            
+            if (joinCode && playerName) {
+                console.log(`Attempting to join session ${joinCode} as ${playerName}`);
+                joinSession(joinCode, playerName);
+            } else {
+                showMessage('Please enter both session code and your name.', 'error');
+            }
+        }
+
+        function copySessionCode() {
+            if (currentSession) {
+                const shareURL = shareSessionURL(currentSession.code);
+                navigator.clipboard.writeText(shareURL).then(() => {
+                    showMessage('Session URL copied to clipboard! Share this with other players.', 'success');
+                }).catch(() => {
+                    showMessage(`Failed to copy URL. Please copy manually: ${shareURL}`, 'error');
+                });
+            }
+        }
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('Page loaded, initializing...');
+
+            // Initialize theme
+            initializeTheme();
+
+            // Check for session in URL
+            const sessionFromURL = getSessionFromURL();
+            if (sessionFromURL) {
+                // Auto-fill join form if session code is in URL
+                const joinCodeInput = document.getElementById('joinCode');
+                if (joinCodeInput) {
+                    joinCodeInput.value = sessionFromURL;
+                    showPage('joinSession');
+                }
+            }
+
+            // Theme toggle
+            const themeToggle = document.getElementById('themeToggle');
+            if (themeToggle) {
+                themeToggle.addEventListener('click', toggleTheme);
+                console.log('Theme toggle bound');
+            }
+
+            // Export button
+            const exportBtn = document.querySelector('.export-btn');
+            if (exportBtn) {
+                exportBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    exportSessionData();
+                });
+                console.log('Export button bound');
+            }
+
+            // Check if elements exist before binding events
+            const createSessionCard = document.getElementById('createSessionCard');
+            if (createSessionCard) {
+                createSessionCard.addEventListener('click', () => {
+                    showPage('createSession');
+                });
+            }
+
+            const joinSessionCard = document.getElementById('joinSessionCard');
+            if (joinSessionCard) {
+                joinSessionCard.addEventListener('click', () => {
+                    showPage('joinSession');
+                });
+            }
+
+            // Back buttons
+            const backToLanding = document.getElementById('backToLanding');
+            if (backToLanding) {
+                backToLanding.addEventListener('click', () => {
+                    showPage('landing');
+                });
+            }
+
+            const backToLandingFromJoin = document.getElementById('backToLandingFromJoin');
+            if (backToLandingFromJoin) {
+                backToLandingFromJoin.addEventListener('click', () => {
+                    showPage('landing');
+                });
+            }
+
+            const backToHomeBtn = document.getElementById('backToHomeBtn');
+            if (backToHomeBtn) {
+                backToHomeBtn.addEventListener('click', () => {
+                    showPage('landing');
+                });
+            }
+
+            // Player count controls
+            const decreasePlayerCount = document.getElementById('decreasePlayerCount');
+            if (decreasePlayerCount) {
+                decreasePlayerCount.addEventListener('click', () => {
+                    const display = document.getElementById('playerCountDisplay');
+                    if (display) {
+                        let count = parseInt(display.textContent);
+                        if (count > 1) {
+                            display.textContent = count - 1;
+                        }
+                    }
+                });
+            }
+
+            const increasePlayerCount = document.getElementById('increasePlayerCount');
+            if (increasePlayerCount) {
+                increasePlayerCount.addEventListener('click', () => {
+                    const display = document.getElementById('playerCountDisplay');
+                    if (display) {
+                        let count = parseInt(display.textContent);
+                        if (count < 12) {
+                            display.textContent = count + 1;
+                        }
+                    }
+                });
+            }
+
+            // Form submissions
+            const createSessionForm = document.getElementById('createSessionForm');
+            if (createSessionForm) {
+                createSessionForm.addEventListener('submit', handleCreateSession);
+            }
+
+            const joinSessionForm = document.getElementById('joinSessionForm');
+            if (joinSessionForm) {
+                joinSessionForm.addEventListener('submit', handleJoinSession);
+            }
+
+            // Session success actions
+            const startScoringBtn = document.getElementById('startScoringBtn');
+            if (startScoringBtn) {
+                startScoringBtn.addEventListener('click', () => {
+                    updateScorekeeperInterface();
+                    showPage('scorekeeper');
+                });
+            }
+
+            const copyCodeBtn = document.getElementById('copyCodeBtn');
+            if (copyCodeBtn) {
+                copyCodeBtn.addEventListener('click', copySessionCode);
+            }
+
+            // Scorekeeper actions
+            const shareCodeBtn = document.getElementById('shareCodeBtn');
+            if (shareCodeBtn) {
+                shareCodeBtn.addEventListener('click', copySessionCode);
+            }
+            
+            const resetScoresBtn = document.getElementById('resetScoresBtn');
+            if (resetScoresBtn) {
+                resetScoresBtn.addEventListener('click', () => {
+                    if (confirm('Are you sure you want to reset all scores?')) {
+                        if (currentSession) {
+                            currentSession.players.forEach(player => {
+                                player.score = currentSession.startingScore;
+                                player.history.push({
+                                    score: currentSession.startingScore,
+                                    change: 0,
+                                    timestamp: Date.now()
+                                });
+                            });
+                            
+                            // Save updated session
+                            saveSessionData(currentSession.code, currentSession);
+                            
+                            updateScorekeeperInterface();
+                            showMessage('All scores have been reset!', 'success');
+                        }
+                    }
+                });
+            }
+
+            const endGameBtn = document.getElementById('endGameBtn');
+            if (endGameBtn) {
+                endGameBtn.addEventListener('click', () => {
+                    if (confirm('Are you sure you want to end the game?')) {
+                        currentSession = null;
+                        currentPlayerId = null;
+                        currentPlayerName = "Guest";
+                        showPage('landing');
+                        showMessage('Game ended successfully!', 'success');
+                    }
+                });
+            }
+
+            console.log('App initialized successfully!');
+        });
+
+        // Make functions globally accessible
+        window.updateScore = updateScore;
+        window.showCustomScoreInput = showCustomScoreInput;
+        window.editPlayerName = editPlayerName;
+        window.updatePlayerColor = updatePlayerColor;
+        window.resetPlayerScore = resetPlayerScore;
+        window.createTeam = createTeam;
+        window.addPlayerToTeam = addPlayerToTeam;
+        window.toggleTheme = toggleTheme;
+        window.exportSessionData = exportSessionData;
+
+        console.log('GameScore Pro script loaded successfully!');
+    </script>
+</body>
+</html>
+
